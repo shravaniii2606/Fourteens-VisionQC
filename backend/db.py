@@ -56,6 +56,14 @@ def connect() -> sqlite3.Connection:
         "INSERT OR IGNORE INTO settings(key, value) VALUES('threshold', ?)",
         (str(config.DEFAULT_THRESHOLD),),
     )
+    connection.executemany(
+        "INSERT OR IGNORE INTO settings(key, value) VALUES(?, ?)",
+        (
+            ("window_n", json.dumps(config.REPEAT_WINDOW)),
+            ("cluster_k", json.dumps(config.REPEAT_COUNT)),
+            ("show_seed", json.dumps(config.SHOW_SEED_DATA)),
+        ),
+    )
     connection.commit()
     return connection
 
@@ -97,8 +105,12 @@ def add_inspection(
 
 def get_history(limit: int = 20) -> list[dict[str, Any]]:
     """Return recent inspections, newest first."""
+    show_seed = bool(get_setting("show_seed", config.SHOW_SEED_DATA))
     with session() as connection:
-        rows = connection.execute("SELECT * FROM inspections ORDER BY id DESC LIMIT ?", (limit,)).fetchall()
+        query = "SELECT * FROM inspections"
+        if not show_seed:
+            query += " WHERE source != 'seed'"
+        rows = connection.execute(f"{query} ORDER BY id DESC LIMIT ?", (limit,)).fetchall()
     return [dict(row) for row in rows]
 
 
@@ -157,6 +169,15 @@ def get_setting(key: str, default: Any = None) -> Any:
         return json.loads(row["value"])
     except json.JSONDecodeError:
         return row["value"]
+
+
+def get_app_settings() -> dict[str, int | bool]:
+    """Return persisted Settings controls using the configured defaults."""
+    return {
+        "window_n": int(get_setting("window_n", config.REPEAT_WINDOW)),
+        "cluster_k": int(get_setting("cluster_k", config.REPEAT_COUNT)),
+        "show_seed": bool(get_setting("show_seed", config.SHOW_SEED_DATA)),
+    }
 
 
 def add_alert(message: str, cell_x: int, cell_y: int) -> int:
