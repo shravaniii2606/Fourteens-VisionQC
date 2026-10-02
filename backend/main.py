@@ -160,14 +160,13 @@ async def fit(request: Request) -> dict[str, Any]:
     suggested = max(calibration["max"] * config.THRESHOLD_MARGIN, 1e-6)
     db.set_threshold(suggested)
     db.set_setting("calibration", calibration)
-    db.set_setting("calibration_scores", active_model.good_score_samples)
+    db.set_setting("fitted_at", datetime.now(timezone.utc).isoformat(timespec="seconds"))
     return {
         "fit": fit_result,
         "calibration": calibration,
         "capture_calibration": capture_stats,
         "suggested_threshold": suggested,
         "threshold": suggested,
-        "false_rejection_pct": _false_rejection_pct(suggested),
     }
 
 
@@ -291,41 +290,22 @@ async def inspect(frame: UploadFile = File(...), source: str = Form("webcam")) -
     return response
 
 
-def _false_rejection_pct(threshold: float) -> float | None:
-    """Return the share of leave-one-out good scores above a threshold."""
-    scores = db.get_setting("calibration_scores", [])
-    if not scores:
-        return None
-    return 100.0 * sum(float(score) > threshold for score in scores) / len(scores)
-
-
 @app.get("/threshold")
-def read_threshold() -> dict[str, Any]:
+def read_threshold() -> dict[str, float]:
     """Return the active supervisor threshold and calibration interval."""
     calibration = db.get_setting("calibration", {})
-    threshold = db.get_threshold()
-    suggestion = max(float(calibration["max"]) * config.THRESHOLD_MARGIN, 1e-6) if calibration else None
-    calibrated_min = float(calibration.get("min", 0.0))
-    calibrated_max = float(calibration.get("max", threshold * 2.0))
     return {
-        "threshold": threshold,
-        "min": calibrated_min,
-        "max": max(calibrated_max, suggestion or 0.0, threshold * 1.1, calibrated_min + 1e-6),
-        "recommended_min": calibrated_min if calibration else None,
-        "recommended_max": suggestion,
-        "suggested_threshold": suggestion,
-        "false_rejection_pct": _false_rejection_pct(threshold),
+        "threshold": db.get_threshold(),
+        "min": float(calibration.get("min", 0.0)),
+        "max": float(calibration.get("max", db.get_threshold() * 2.0)),
     }
 
 
 @app.post("/threshold")
-def update_threshold(payload: ThresholdInput) -> dict[str, Any]:
+def update_threshold(payload: ThresholdInput) -> dict[str, float]:
     """Update the supervisor's positive score threshold."""
     db.set_threshold(payload.threshold)
-    return {
-        "threshold": payload.threshold,
-        "false_rejection_pct": _false_rejection_pct(payload.threshold),
-    }
+    return {"threshold": payload.threshold}
 
 
 @app.post("/feedback/{inspection_id}")
