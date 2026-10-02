@@ -7,7 +7,7 @@ A local visual-defect inspection demo. It builds a PatchCore-style normal memory
 - Python 3.11 (the source can be syntax-checked on Python 3.12; install dependencies into Python 3.11 for the requested runtime).
 - Node.js and npm.
 - A webcam is optional. An MVTec AD download is only needed for dataset fitting/evaluation; alternatively upload at least two good photos.
-- The first model startup downloads torchvision's pretrained weights if they are not already cached. Thereafter the memory bank and database are local. Chat requires `ANTHROPIC_API_KEY`; all other workflows run locally.
+- The first model startup downloads torchvision's pretrained weights if they are not already cached. Thereafter the memory bank and database are local. Chat calls OpenRouter and requires an API key; all other workflows run locally.
 
 ## Install
 
@@ -20,6 +20,14 @@ python -m pip install --upgrade pip
 python -m pip install torch torchvision --index-url https://download.pytorch.org/whl/cpu
 python -m pip install -r backend\requirements.txt
 ```
+
+For OpenRouter chat, add your key to the root `.env` file:
+
+```text
+OPENROUTER_API_KEY=your-openrouter-api-key
+```
+
+The default model is `openai/gpt-4o-mini`. Change `OPENROUTER_MODEL` in `backend/config.py` to another model enabled for your OpenRouter account. Restart the backend after editing `.env`.
 
 Install the frontend packages:
 
@@ -59,7 +67,7 @@ npm run dev
 
 Open `http://localhost:5173`. Choose **Fit from dataset** or upload at least two good photos before inspecting. Browser camera access requires localhost permission. Video files are read in-browser and submitted frame-by-frame. Data is stored under `data/`; the model is not refit on startup.
 
-To enable the data-only chat, set `ANTHROPIC_API_KEY` in the backend terminal environment before starting Uvicorn. Questions are answered using only inspection data from SQLite.
+To enable the data-only chat, set `OPENROUTER_API_KEY` in the root `.env` file. Questions are answered using only inspection data from SQLite.
 
 ## Evaluate
 
@@ -85,5 +93,5 @@ This inserts 60 synthetic inspections with `source='seed'`, timestamps spread ac
 
 - Backbone defaults to torchvision `wide_resnet50_2`; set `BACKBONE = "resnet18"` in `backend/config.py` for a smaller CPU model.
 - No anomalib or FAISS is used. Nearest-neighbor queries use chunked `torch.cdist`.
-- Set `ALIGN_ENABLED = False` in `backend/config.py` if ORB alignment does not match a particular fixture.
+- ORB alignment is off by default because the included MVTec demo frames are already framed and provide too few stable ORB matches. Set `ALIGN_ENABLED = True` in `backend/config.py` for a fixed camera/reference rig, then restart the backend.
 - The default UI/API pair uses `localhost:5173` and `localhost:8000`.

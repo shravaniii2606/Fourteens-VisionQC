@@ -3,8 +3,9 @@
 from __future__ import annotations
 
 import json
-import os
 from typing import Any
+
+from dotenv import load_dotenv
 
 from . import analytics, config, db
 
@@ -28,26 +29,38 @@ def _context() -> dict[str, Any]:
 
 
 def answer(question: str) -> dict[str, str]:
-    """Query Anthropic with a strict SQLite-only inspection context."""
-    api_key = os.environ.get("ANTHROPIC_API_KEY")
-    if not api_key:
-        return {"answer": "Chat unavailable: ANTHROPIC_API_KEY is not set."}
-    try:
-        from anthropic import Anthropic
+    """Query OpenRouter with a strict SQLite-only inspection context."""
+    load_dotenv(config.ROOT_DIR / ".env")
+    import os
 
-        client = Anthropic(api_key=api_key)
-        response = client.messages.create(
-            model=config.ANTHROPIC_MODEL,
-            max_tokens=config.ANTHROPIC_MAX_TOKENS,
-            system=SYSTEM_PROMPT,
+    api_key = os.environ.get("OPENROUTER_API_KEY")
+    if not api_key:
+        return {"answer": "Chat unavailable: add OPENROUTER_API_KEY to the project .env file."}
+    try:
+        from openai import OpenAI
+
+        client = OpenAI(
+            api_key=api_key,
+            base_url=config.OPENROUTER_BASE_URL,
+            default_headers={
+                "HTTP-Referer": "http://localhost:5173",
+                "X-Title": "VisionQC",
+            },
+        )
+        response = client.chat.completions.create(
+            model=config.OPENROUTER_MODEL,
+            max_tokens=config.CHAT_MAX_TOKENS,
             messages=[{
+                "role": "system",
+                "content": SYSTEM_PROMPT,
+            }, {
                 "role": "user",
                 "content": "Inspection data (SQLite):\n"
                 + json.dumps(_context(), ensure_ascii=True)
                 + "\n\nQuestion: " + question,
             }],
         )
-        text = "\n".join(block.text for block in response.content if getattr(block, "type", "") == "text")
+        text = response.choices[0].message.content or ""
         return {"answer": text or "The inspection data does not contain an answer."}
     except Exception as error:
         return {"answer": f"Chat request failed: {error}"}

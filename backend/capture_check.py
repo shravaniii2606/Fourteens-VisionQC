@@ -15,16 +15,22 @@ def calibrate_capture(good_images: list[np.ndarray]) -> dict[str, float]:
     brightness: list[float] = []
     sharpness: list[float] = []
     texture: list[float] = []
+    dark_pixel_fractions: list[float] = []
+    bright_pixel_fractions: list[float] = []
     for image in good_images:
         gray = cv2.cvtColor(image, cv2.COLOR_RGB2GRAY) if image.ndim == 3 else image
         brightness.append(float(gray.mean()))
         sharpness.append(float(cv2.Laplacian(gray, cv2.CV_64F).var()))
         texture.append(float(gray.std()))
+        dark_pixel_fractions.append(float(np.mean(gray <= 3)))
+        bright_pixel_fractions.append(float(np.mean(gray >= 252)))
     result = {
         "brightness_min": max(0.0, min(brightness) - 3.0),
         "brightness_max": min(255.0, max(brightness) + 3.0),
         "sharpness_min": max(config.BLUR_FALLBACK, min(sharpness) * 0.5),
         "texture_min": max(4.0, min(texture) * 0.35),
+        "dark_pixel_max": min(1.0, max(dark_pixel_fractions) + config.CAPTURE_PIXEL_FRACTION_MARGIN),
+        "bright_pixel_max": min(1.0, max(bright_pixel_fractions) + config.CAPTURE_PIXEL_FRACTION_MARGIN),
     }
     db.set_setting("capture_calibration", result)
     return result
@@ -41,9 +47,9 @@ def check(frame: np.ndarray) -> dict[str, Any]:
         return {"ok": False, "reason": "Too dark"}
     if mean > calibration.get("brightness_max", config.CAPTURE_BRIGHT_FALLBACK):
         return {"ok": False, "reason": "Too bright"}
-    if float(np.mean(gray <= 3)) > config.DARK_PIXEL_LIMIT:
+    if float(np.mean(gray <= 3)) > calibration.get("dark_pixel_max", config.DARK_PIXEL_LIMIT):
         return {"ok": False, "reason": "Too dark"}
-    if float(np.mean(gray >= 252)) > config.BRIGHT_PIXEL_LIMIT:
+    if float(np.mean(gray >= 252)) > calibration.get("bright_pixel_max", config.BRIGHT_PIXEL_LIMIT):
         return {"ok": False, "reason": "Too bright"}
     sharpness = float(cv2.Laplacian(gray, cv2.CV_64F).var())
     if sharpness < calibration.get("sharpness_min", config.BLUR_FALLBACK):

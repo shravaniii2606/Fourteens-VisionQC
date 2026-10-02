@@ -1,0 +1,16 @@
+shot_number,source_image_filename,type,expected_verdict,start_time_s,end_time_s
+1,019.png,good,PASS,0.0,1.5
+2,005.png,good,PASS,1.5,3.0
+3,014.png,defect,FAIL,3.0,4.5
+4,014.png,good,PASS,4.5,6.0
+5,004.png,dark,RECAPTURE,6.0,7.5
+6,009.png,good,PASS,7.5,9.0
+7,000.png,defect,FAIL,9.0,10.5
+8,013.png,good,PASS,10.5,12.0
+9,015.png,blur,RECAPTURE,12.0,13.5
+10,018.png,good,PASS,13.5,15.0
+11,002.png,defect,FAIL,15.0,16.5
+12,006.png,bright,RECAPTURE,16.5,18.0
+13,012.png,good,PASS,18.0,19.5
+14,008.png,defect,FAIL,19.5,21.0
+15,017.png,good,PASS,21.0,22.5
