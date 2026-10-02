@@ -29,21 +29,11 @@ function EmptyState({ title = 'Fit the model first', detail = 'Teach VisionQC wh
 function Toast({ message, onClose }) { useEffect(() => { if (!message) return; const id = setTimeout(onClose, 5200); return () => clearTimeout(id); }, [message, onClose]); return message ? <div className="toast" role="status"><AlertCircle size={17}/><span>{message}</span><button onClick={onClose} aria-label="Dismiss"><X size={16}/></button></div> : null; }
 
 const LENS_CONFIG = { radius: 140, growRadius: 190, mobileRadius: 100, lerp: 0.12, wobble: 4, wobbleMs: 1600, hoverMs: 200, introMs: 600, exitMs: 200, expandMs: 350 };
-const HERO_PRODUCTS = [
-  { name: 'wood', src: '/products/bottle-wood.webp', anomaly: 'Surface anomaly, 0.87' },
-  { name: 'steel', src: '/products/bottle-steel.webp', anomaly: 'Defect found: scratch, 0.87' },
-  { name: 'green', src: '/products/bottle-green.webp', anomaly: 'Edge deviation 0.41' },
-  { name: 'mug-blue', src: '/products/mug-blue.webp', anomaly: 'Surface anomaly, 0.87' },
-  { name: 'mug-violet', src: '/products/mug-violet.webp', anomaly: 'Edge deviation 0.41' },
-  { name: 'tiffin', src: '/products/tiffin.webp', anomaly: 'Surface anomaly, 0.87' },
-];
 
 function HeroContent({ variant = 'base', onHow }) {
   const anomaly = variant === 'anomaly';
   return <>
-    <div className="hero-objects" aria-hidden="true">{HERO_PRODUCTS.map((product) => <div className={`loose-product product-${product.name}`} key={product.name}>
-      <img src={product.src} alt=""/>{anomaly && <span className="product-anomaly-label">{product.anomaly}</span>}
-    </div>)}</div>
+    <div className="hero-feature-bottle" aria-hidden="true"><img src="/products/bottle-steel.webp" alt=""/>{anomaly && <svg className="hero-bottle-crack" viewBox="0 0 200 400" preserveAspectRatio="none"><path className="crack-glint" d="M103 265 91 284 101 300 86 319 98 333 86 351 101 365 94 383 M97 313 76 325 66 344 M99 333 116 322 129 331 145 326"/><path className="crack-line" d="M103 265 91 284 101 300 86 319 98 333 86 351 101 365 94 383 M97 313 76 325 66 344 M99 333 116 322 129 331 145 326"/></svg>}</div>
     <div className="hero-content">
       <div className="hero-kicker"><span className="live-dot"/> INTELLIGENT QUALITY CONTROL</div>
       <h1>Vision<span>QC</span></h1><p className="hero-tagline">AI DEFECT INSPECTION FOR SMALL FACTORIES</p><p className="hero-subline">Better Quality. Less Waste.</p>
