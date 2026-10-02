@@ -1,0 +1,11 @@
+.venv/
+__pycache__/
+*.py[cod]
+frontend/node_modules/
+frontend/dist/
+data/mvtec/
+data/frames/
+data/memory_bank.pt
+data/visionqc.db*
+data/reference.jpg
+data/empty_background.jpg
