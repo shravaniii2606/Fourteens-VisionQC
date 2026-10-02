@@ -183,13 +183,15 @@ class PatchCore:
         self.save()
         return self.calibration.copy()
 
-    def confidence_pct(self, score: float) -> float:
-        """Map scores to a bounded 0-100 confidence relative to calibration."""
-        low = self.calibration.get("min", 0.0)
-        high = self.calibration.get("max", low)
-        if high <= low:
-            return 0.0 if score > high else 100.0
-        return float(np.clip(100.0 * (high - score) / (high - low), 0.0, 100.0))
+    def confidence_pct(self, score: float, threshold: float) -> float:
+        """Map pass/fail separation from the good-score mean to 0-100 percent."""
+        good_mean = self.calibration.get("mean", threshold)
+        margin = max(threshold - good_mean, 1e-6)
+        if score <= threshold:
+            confidence = (threshold - score) / margin
+        else:
+            confidence = (score - threshold) / margin
+        return float(np.clip(confidence * 100.0, 0.0, 100.0))
 
     def save(self) -> None:
         """Persist bank and metadata to the configured local path."""
