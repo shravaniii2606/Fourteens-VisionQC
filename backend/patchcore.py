@@ -28,6 +28,7 @@ class PatchCore:
         self.grid_size: tuple[int, int] | None = None
         self.category = config.CATEGORY
         self.calibration: dict[str, float] = {}
+        self.good_score_samples: list[float] = []
         if self.bank_path.exists():
             self.load()
 
@@ -174,6 +175,7 @@ class PatchCore:
             other_bank = self._subsample(other_patches, config.MAX_BANK_PATCHES)
             scores.append(self._score_with_bank(image, other_bank)[1])
         values = np.asarray(scores, dtype=np.float64)
+        self.good_score_samples = [float(value) for value in values]
         self.calibration = {
             "min": float(values.min()),
             "max": float(values.max()),
@@ -205,6 +207,7 @@ class PatchCore:
                 "category": self.category,
                 "backbone": self.backbone_name,
                 "calibration": self.calibration,
+                "good_score_samples": self.good_score_samples,
             },
             self.bank_path,
         )
@@ -218,3 +221,4 @@ class PatchCore:
         self.grid_size = tuple(saved["grid_size"]) if saved.get("grid_size") else None
         self.category = str(saved.get("category", config.CATEGORY))
         self.calibration = {key: float(value) for key, value in saved.get("calibration", {}).items()}
+        self.good_score_samples = [float(value) for value in saved.get("good_score_samples", [])]
