@@ -28,14 +28,110 @@ function Spinner() { return <span className="spinner" aria-label="Loading"/>; }
 function EmptyState({ title = 'Fit the model first', detail = 'Teach VisionQC what a good unit looks like to start inspection.', action }) { return <div className="empty-state"><span className="empty-icon"><Layers3 size={23}/></span><strong>{title}</strong><p>{detail}</p>{action}</div>; }
 function Toast({ message, onClose }) { useEffect(() => { if (!message) return; const id = setTimeout(onClose, 5200); return () => clearTimeout(id); }, [message, onClose]); return message ? <div className="toast" role="status"><AlertCircle size={17}/><span>{message}</span><button onClick={onClose} aria-label="Dismiss"><X size={16}/></button></div> : null; }
 
+const LENS_CONFIG = { radius: 140, growRadius: 190, mobileRadius: 100, lerp: 0.12, wobble: 4, wobbleMs: 1600, hoverMs: 200, introMs: 600, exitMs: 200, expandMs: 350 };
+const HERO_PRODUCTS = [
+  { name: 'wood', src: '/products/bottle-wood.webp', anomaly: 'Surface anomaly, 0.87' },
+  { name: 'steel', src: '/products/bottle-steel.webp', anomaly: 'Defect found: scratch, 0.87' },
+  { name: 'green', src: '/products/bottle-green.webp', anomaly: 'Edge deviation 0.41' },
+  { name: 'mug-blue', src: '/products/mug-blue.webp', anomaly: 'Surface anomaly, 0.87' },
+  { name: 'mug-violet', src: '/products/mug-violet.webp', anomaly: 'Edge deviation 0.41' },
+  { name: 'tiffin', src: '/products/tiffin.webp', anomaly: 'Surface anomaly, 0.87' },
+];
+
+function HeroContent({ variant = 'base', onHow }) {
+  const anomaly = variant === 'anomaly';
+  return <>
+    <div className="hero-objects" aria-hidden="true">{HERO_PRODUCTS.map((product) => <div className={`loose-product product-${product.name}`} key={product.name}>
+      <img src={product.src} alt=""/>{anomaly && <span className="product-anomaly-label">{product.anomaly}</span>}
+    </div>)}</div>
+    <div className="hero-content">
+      <div className="hero-kicker"><span className="live-dot"/> INTELLIGENT QUALITY CONTROL</div>
+      <h1>Vision<span>QC</span></h1><p className="hero-tagline">AI DEFECT INSPECTION FOR SMALL FACTORIES</p><p className="hero-subline">Better Quality. Less Waste.</p>
+      <div className="hero-actions">{anomaly ? <><span className="button primary">START INSPECTION <ArrowRight size={16}/></span><span className="button outline">SEE HOW IT WORKS <Play size={14}/></span></> : <><Link className="button primary" to="/login">START INSPECTION <ArrowRight size={16}/></Link><a className="button outline" href="#how-it-works" onClick={onHow}>SEE HOW IT WORKS <Play size={14}/></a></>}</div>
+      <div className="hero-proof"><ShieldCheck size={15}/> Secure <i/> Reliable <i/> Built for industry</div>
+    </div><div className="hero-product-note">Precision vision for every production line</div>
+  </>;
+}
+
+function InspectionHero() {
+  const navigate = useNavigate();
+  const hostRef = useRef(null);
+  const lensRef = useRef(null);
+  const ringRef = useRef(null);
+  useEffect(() => {
+    const host = hostRef.current, ring = ringRef.current;
+    if (!host || !ring) return undefined;
+    if (!window.CSS?.supports?.('clip-path', 'circle(10px at 50% 50%)')) { host.classList.add('lens-unsupported'); return undefined; }
+    const reduceQuery = window.matchMedia('(prefers-reduced-motion: reduce)');
+    const touchQuery = window.matchMedia('(hover: none)');
+    let reduced = reduceQuery.matches, touch = touchQuery.matches;
+    let visible = document.visibilityState === 'visible', inView = true, frame = 0;
+    let pointerMoved = false, active = !reduced, expanding = false;
+    let targetX = host.clientWidth / 2, targetY = host.clientHeight / 2;
+    const current = { x: targetX, y: targetY, radius: 0 };
+    const baseRadius = () => matchMedia('(max-width: 820px)').matches ? LENS_CONFIG.mobileRadius : LENS_CONFIG.radius;
+    let radiusTween = { from: 0, to: baseRadius(), start: performance.now(), duration: LENS_CONFIG.introMs };
+    const ease = (v) => 1 - Math.pow(1 - Math.max(0, Math.min(1, v)), 3);
+    const animateRadius = (to, duration) => { radiusTween = { from: current.radius, to, start: performance.now(), duration }; start(); };
+    const updateTarget = (event) => { const b = host.getBoundingClientRect(); targetX = Math.max(0, Math.min(b.width, event.clientX - b.left)); targetY = Math.max(0, Math.min(b.height, event.clientY - b.top)); pointerMoved = true; active = true; };
+    const onMove = (event) => {
+      if (touch || reduced || event.pointerType === 'touch' || expanding) return;
+      updateTarget(event);
+      const grow = event.target.closest?.('a,button,[role="link"],.loose-product');
+      animateRadius(baseRadius() + (grow ? Math.min(50, LENS_CONFIG.growRadius - LENS_CONFIG.radius) : 0), LENS_CONFIG.hoverMs);
+    };
+    const onEnter = (event) => { if (touch || reduced || expanding) return; updateTarget(event); active = true; animateRadius(baseRadius(), LENS_CONFIG.hoverMs); };
+    const onLeave = () => { if (touch || reduced || expanding) return; active = false; animateRadius(0, LENS_CONFIG.exitMs); };
+    const onVisibility = () => { visible = document.visibilityState === 'visible'; visible && inView ? start() : stop(); };
+    const onReduce = (event) => { reduced = event.matches; if (reduced) { active = false; expanding = false; current.x = host.clientWidth/2; current.y = host.clientHeight/2; current.radius = baseRadius(); animateRadius(baseRadius(), 0); } else animateRadius(active ? baseRadius() : 0, LENS_CONFIG.hoverMs); start(); };
+    const onTouch = (event) => { touch = event.matches; pointerMoved = false; active = touch; targetX = host.clientWidth/2; targetY = host.clientHeight/2; animateRadius(baseRadius(), LENS_CONFIG.introMs); };
+    function draw(now) {
+      frame = 0; if (!visible || !inView) return;
+      const w = host.clientWidth, h = host.clientHeight;
+      if (reduced) { current.x = w/2; current.y = h/2; current.radius = baseRadius(); }
+      else {
+        if (touch) { const t = now/1000; targetX = w/2 + Math.sin(t*.47)*w*.29; targetY = h/2 + Math.sin(t*.71+1.2)*h*.22; }
+        else if (!pointerMoved && now - radiusTween.start < LENS_CONFIG.introMs) { targetX=w/2; targetY=h/2; }
+        current.x += (targetX-current.x)*LENS_CONFIG.lerp; current.y += (targetY-current.y)*LENS_CONFIG.lerp;
+        const p = radiusTween.duration <= 0 ? 1 : Math.min(1,(now-radiusTween.start)/radiusTween.duration);
+        current.radius = radiusTween.from + (radiusTween.to-radiusTween.from)*ease(p);
+        if (active && !expanding && current.radius > 0) current.radius += Math.sin(now/LENS_CONFIG.wobbleMs*Math.PI*2)*LENS_CONFIG.wobble;
+      }
+      host.style.setProperty('--lens-x',`${current.x}px`); host.style.setProperty('--lens-y',`${current.y}px`); host.style.setProperty('--lens-r',`${Math.max(0,current.radius)}px`);
+      ring.style.transform = `translate3d(${current.x}px,${current.y}px,0) translate(-50%,-50%)`;
+      ring.style.width = `${Math.max(0,current.radius)*2}px`; ring.style.height = `${Math.max(0,current.radius)*2}px`;
+      if (!reduced || touch || active || current.radius !== radiusTween.to) frame=requestAnimationFrame(draw);
+    }
+    function start(){ if (!frame && visible && inView) frame=requestAnimationFrame(draw); }
+    function stop(){ if(frame) cancelAnimationFrame(frame); frame=0; }
+    const onResize = () => { if (!pointerMoved || reduced) {targetX=host.clientWidth/2;targetY=host.clientHeight/2;} if(reduced) current.radius=baseRadius(); start(); };
+    const startButton = host.querySelector('.hero-base-layer .button.primary');
+    const startInspection = (event) => { event.preventDefault(); if(reduced){navigate('/login');return;} expanding=true; active=false; animateRadius(Math.hypot(host.clientWidth,host.clientHeight)+30,LENS_CONFIG.expandMs); window.setTimeout(()=>navigate('/login'),LENS_CONFIG.expandMs); };
+    host.addEventListener('pointermove',onMove); host.addEventListener('pointerenter',onEnter); host.addEventListener('pointerleave',onLeave);
+    window.addEventListener('resize',onResize); document.addEventListener('visibilitychange',onVisibility);
+    reduceQuery.addEventListener?.('change',onReduce); touchQuery.addEventListener?.('change',onTouch);
+    const observer='IntersectionObserver' in window ? new IntersectionObserver(([entry])=>{inView=entry.isIntersecting;inView&&visible?start():stop();},{threshold:.01}):null;
+    observer?.observe(host); startButton?.addEventListener('click',startInspection);
+    if(reduced){current.radius=baseRadius();radiusTween={from:current.radius,to:current.radius,start:performance.now(),duration:0};}
+    start();
+    return ()=>{stop();observer?.disconnect();host.removeEventListener('pointermove',onMove);host.removeEventListener('pointerenter',onEnter);host.removeEventListener('pointerleave',onLeave);window.removeEventListener('resize',onResize);document.removeEventListener('visibilitychange',onVisibility);reduceQuery.removeEventListener?.('change',onReduce);touchQuery.removeEventListener?.('change',onTouch);startButton?.removeEventListener('click',startInspection);};
+  },[navigate]);
+  const scrollToHow = (event) => { event.preventDefault(); document.querySelector('#how-it-works')?.scrollIntoView({behavior:matchMedia('(prefers-reduced-motion: reduce)').matches?'auto':'smooth'}); };
+  return <section className="hero lens-hero" id="product" aria-label="VisionQC AI defect inspection" ref={hostRef}>
+    <div className="hero-base-layer"><div className="hero-background light"><img src="/bg-light.jpg" alt="" aria-hidden="true" width="1024" height="572" decoding="async" onError={()=>console.warn('VisionQC light hero image unavailable; using gradient fallback.')}/></div><div className="hero-base-overlay"/><HeroContent onHow={scrollToHow}/></div>
+    <div className="hero-lens-layer" ref={lensRef} aria-hidden="true"><div className="hero-background dark"><img src="/bg-dark.jpg" alt="" aria-hidden="true" width="1024" height="572" decoding="async" onError={()=>console.warn('VisionQC dark hero image unavailable; using gradient fallback.')}/></div><div className="hero-dark-overlay"/><div className="hero-cyan-grid"/><div className="hero-scan-line"/><HeroContent variant="anomaly"/></div>
+    <div className="hero-lens-ring" ref={ringRef} aria-hidden="true"/>
+  </section>;
+}
+
 function Landing() {
   const { scrollYProgress } = useScroll();
   const healing = useTransform(scrollYProgress, [0.24, 0.43], [1, 0]);
   const crackOpacity = useTransform(healing, [0, 0.15, 1], [0, 0.28, 1]);
   const crackDash = useTransform(healing, (v) => 1 - v);
   return <div className="landing">
-    <header className="public-nav"><Brand/><nav><a href="#product">Product</a><a href="#solutions">Solutions</a><a href="#numbers">Pricing</a><a href="#resources">Resources</a></nav><Link className="button outline nav-login" to="/login">Login</Link></header>
-    <section className="hero" id="product"><div className="hero-orb orb-one"/><div className="hero-orb orb-two"/><div className="product-float float-bottle"><Bottle className="bottle-mini"/><span>Surface inspection<br/><small>No defects detected</small></span></div><div className="product-float float-cup"><span className="cup-shape"/>Material check<br/><small>Stainless steel · OK</small></div><div className="product-float float-tin"><span className="tin-shape"/>Edge inspection<br/><small>Within tolerance</small></div><div className="hero-content"><div className="hero-kicker"><span className="live-dot"/> INTELLIGENT QUALITY CONTROL</div><h1>Vision<span>QC</span></h1><p className="hero-tagline">AI DEFECT INSPECTION FOR SMALL FACTORIES</p><p className="hero-subline">Better Quality. Less Waste.</p><div className="hero-actions"><Link className="button primary" to="/login">START INSPECTION <ArrowRight size={16}/></Link><a className="button outline" href="#how-it-works">SEE HOW IT WORKS <Play size={14}/></a></div><div className="hero-proof"><ShieldCheck size={15}/> Secure <i/> Reliable <i/> Built for industry</div></div><div className="hero-product-note">Precision vision for every production line</div></section>
+    <header className="public-nav"><Brand/><nav aria-label="Main navigation"><a href="#product">Home</a><a href="#product">Product</a><a href="#solutions">Solutions</a><a href="#numbers">Pricing</a><a href="#resources">Resources</a></nav><Link className="button outline nav-login" to="/login">Login</Link></header>
+    <InspectionHero/>
     <section className="heal-section" id="how-it-works"><div className="heal-copy"><span className="eyebrow">A defect you can watch disappear</span><h2>Crack-healing scrollbar</h2><p>See defects disappear as you scroll. VisionQC learns the difference between a harmless mark and a real quality issue.</p><div className="stage-list"><span>01 <b>Detect</b><small>Surface crack found</small></span><span>02 <b>Analyze</b><small>Compare to normal units</small></span><span>03 <b>Decide</b><small>Clear, confident results</small></span></div></div><div className="heal-visual"><div className="heal-bottle-wrap"><Bottle className="hero-bottle"/><motion.svg className="crack-overlay" viewBox="0 0 200 400" aria-hidden="true"><motion.path d="M115 174l-16 20 19 14-20 23 16 18-15 22" pathLength={1} fill="none" stroke="#e5484d" strokeWidth="3" strokeLinecap="round" style={{ opacity: crackOpacity, strokeDasharray: 1, strokeDashoffset: crackDash }}/></motion.svg><motion.div className="magnifier" style={{ opacity: useTransform(healing, [0,1], [1,.3]) }}><span/></motion.div></div><div className="heal-stages"><span>0% (cracked)</span><ArrowRight/><span>25%</span><ArrowRight/><span>50%</span><ArrowRight/><span>100% (clean)</span></div><div className="scroll-marker"><span className="scroll-line"/><span className="scroll-knob"/><small>Scroll to heal</small></div></div></section>
     <section className="how-section" id="solutions"><SectionTitle eyebrow="Simple by design" title="Quality control, made practical" description="A reliable inspection workflow your team can learn in minutes."/><div className="step-grid">{[[Database,'01','Teach','Show VisionQC 25 good product photos. It learns what normal looks like.'],[ScanLine,'02','Inspect','Use a live camera or recorded video to check each unit.'],[CheckCircle2,'03','Decide','Get an anomaly heatmap, confidence score and clear verdict.']].map(([Icon,num,title,copy])=><Card className="step-card" key={num}><div className="step-icon"><Icon/></div><span className="step-number">{num}</span><h3>{title}</h3><p>{copy}</p></Card>)}</div></section>
     <section className="feature-section" id="resources"><SectionTitle eyebrow="Built for real factories" title="Everything your line needs" description="Practical quality tools, from the first good sample to the next shift."/><div className="feature-grid">{[['Heatmap','See exactly where an anomaly appears.'],['Auto threshold','Tune sensitivity using your calibration range.'],['Capture checks','Catch dark, blurry or shifted frames early.'],['Auto-align','Keep product framing consistent between units.'],['Repeat defect alert','Find recurring faults before they spread.'],['False alarm learning','Teach the model from supervisor feedback.'],['DriftGuard','Know when your camera or process changes.'],['Ask the Log','Get answers from your inspection history.']].map(([t,d])=><Card className="feature-card" key={t}><CheckCircle2 size={18}/><div><h3>{t}</h3><p>{d}</p></div></Card>)}</div></section>
