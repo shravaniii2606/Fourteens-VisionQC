@@ -1,0 +1,21 @@
+body { font-family: Arial, Helvetica, sans-serif; margin: 16px; color: #202020; background: #fff; }
+main { max-width: 1100px; margin: 0 auto; }
+section { border-top: 1px solid #bbb; padding: 8px 0 16px; }
+button, input, video { font: inherit; }
+button { padding: 5px 10px; cursor: pointer; }
+button:disabled { cursor: wait; }
+input[type="range"] { width: min(500px, 70vw); vertical-align: middle; }
+input[type="text"] { min-width: 240px; }
+video { display: block; max-width: min(640px, 100%); max-height: 360px; background: #111; margin: 8px 0; }
+.result-image { display: block; max-width: min(640px, 100%); max-height: 480px; object-fit: contain; border: 1px solid #aaa; }
+.verdict { display: inline-block; font-size: 2rem; font-weight: 700; }
+.verdict.pass { color: #16803c; }
+.verdict.fail { color: #c32626; }
+.verdict.recapture { color: #ae6e00; }
+.chart { width: 100%; min-height: 200px; }
+table { border-collapse: collapse; max-width: 100%; }
+th, td { border: 1px solid #bbb; text-align: left; padding: 5px 8px; }
+.grid { margin-top: 10px; border-collapse: collapse; }
+.grid td { width: 28px; height: 28px; padding: 0; text-align: center; }
+.alert { color: #a10c0c; background: #ffe1e1; padding: 8px; font-weight: 700; }
+@media (max-width: 600px) { body { margin: 8px; } table:not(.grid) { font-size: 0.8rem; } th, td { padding: 4px; } .grid td { width: 24px; height: 24px; } }
