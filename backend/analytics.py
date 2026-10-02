@@ -23,6 +23,8 @@ def _cell_for(row: dict[str, Any]) -> tuple[int, int] | None:
 def stats() -> dict[str, Any]:
     """Summarize counts, rejection rates, score trend, and recapture reasons."""
     today = datetime.now(timezone.utc).date().isoformat()
+    source_filter = "" if db.get_app_settings()["show_seed"] else " WHERE source != 'seed'"
+    reason_filter = "" if db.get_app_settings()["show_seed"] else " AND source != 'seed'"
     with db.session() as connection:
         counts = connection.execute(
             """SELECT COUNT(*) AS total,
@@ -31,11 +33,12 @@ def stats() -> dict[str, Any]:
                       SUM(verdict = 'RECAPTURE') AS recapture_count,
                       SUM(verdict = 'PASS' AND ts LIKE ?) AS today_pass,
                       SUM(verdict = 'FAIL' AND ts LIKE ?) AS today_fail
-               FROM inspections""",
+               FROM inspections""" + source_filter,
             (f"{today}%", f"{today}%"),
         ).fetchone()
         reason_rows = connection.execute(
-            "SELECT reason, COUNT(*) AS count FROM inspections WHERE verdict = 'RECAPTURE' GROUP BY reason ORDER BY count DESC"
+            "SELECT reason, COUNT(*) AS count FROM inspections WHERE verdict = 'RECAPTURE'"
+            + reason_filter + " GROUP BY reason ORDER BY count DESC"
         ).fetchall()
     total = int(counts["total"] or 0)
     pass_count = int(counts["pass_count"] or 0)
@@ -61,8 +64,11 @@ def stats() -> dict[str, Any]:
     }
 
 
-def repeat_defect_check(window: int = config.REPEAT_WINDOW, required: int = config.REPEAT_COUNT) -> list[dict[str, Any]]:
+def repeat_defect_check(window: int | None = None, required: int | None = None) -> list[dict[str, Any]]:
     """Create alerts when a grid location repeats across recent failures."""
+    settings = db.get_app_settings()
+    window = int(settings["window_n"]) if window is None else window
+    required = int(settings["cluster_k"]) if required is None else required
     failures = [row for row in db.get_history(config.ANALYTICS_SCAN_LIMIT) if row["verdict"] == "FAIL"][:window]
     cells = Counter(cell for row in failures if (cell := _cell_for(row)) is not None)
     if not failures:
@@ -85,8 +91,9 @@ def repeat_defect_check(window: int = config.REPEAT_WINDOW, required: int = conf
     return created
 
 
-def cumulative_heatmap(window: int = config.REPEAT_WINDOW) -> dict[str, Any]:
+def cumulative_heatmap(window: int | None = None) -> dict[str, Any]:
     """Return a square grid of failure counts from recent inspections."""
+    window = int(db.get_app_settings()["window_n"]) if window is None else window
     recent = db.get_history(window)
     grid = [[0 for _ in range(config.GRID_SIZE)] for _ in range(config.GRID_SIZE)]
     for row in recent:

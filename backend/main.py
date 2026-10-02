@@ -4,8 +4,10 @@ from __future__ import annotations
 
 import base64
 import io
+import os
 import uuid
 from contextlib import asynccontextmanager
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
@@ -16,6 +18,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 from PIL import Image, UnidentifiedImageError
 from starlette.datastructures import UploadFile as StarletteUploadFile
+from dotenv import load_dotenv
 
 from . import analytics, capture_check, chat, config, db, decision
 from .patchcore import PatchCore
@@ -157,12 +160,93 @@ async def fit(request: Request) -> dict[str, Any]:
     suggested = max(calibration["max"] * config.THRESHOLD_MARGIN, 1e-6)
     db.set_threshold(suggested)
     db.set_setting("calibration", calibration)
+    db.set_setting("fitted_at", datetime.now(timezone.utc).isoformat(timespec="seconds"))
     return {
         "fit": fit_result,
         "calibration": calibration,
         "capture_calibration": capture_stats,
         "suggested_threshold": suggested,
         "threshold": suggested,
+    }
+
+
+@app.get("/settings")
+def read_settings() -> dict[str, int | bool]:
+    """Return the persisted Settings page controls."""
+    return db.get_app_settings()
+
+
+@app.post("/settings")
+def update_settings(payload: dict[str, Any]) -> dict[str, int | bool]:
+    """Validate and persist partial Settings page updates."""
+    allowed = {"window_n", "cluster_k", "show_seed"}
+    unknown = set(payload) - allowed
+    if unknown:
+        raise HTTPException(status_code=400, detail=f"Unsupported setting: {sorted(unknown)[0]}")
+
+    current = db.get_app_settings()
+    window_n = payload.get("window_n", current["window_n"])
+    cluster_k = payload.get("cluster_k", current["cluster_k"])
+    if "window_n" in payload and (
+        isinstance(window_n, bool) or not isinstance(window_n, int) or not 5 <= window_n <= 200
+    ):
+        raise HTTPException(status_code=400, detail="window_n must be an integer between 5 and 200.")
+    if "cluster_k" in payload and (
+        isinstance(cluster_k, bool) or not isinstance(cluster_k, int) or cluster_k < 2
+    ):
+        raise HTTPException(status_code=400, detail="cluster_k must be an integer of at least 2 and no greater than window_n.")
+    if cluster_k > window_n:
+        raise HTTPException(status_code=400, detail="cluster_k must be between 2 and window_n.")
+    if "show_seed" in payload and not isinstance(payload["show_seed"], bool):
+        raise HTTPException(status_code=400, detail="show_seed must be true or false.")
+
+    for key, value in payload.items():
+        db.set_setting(key, value)
+    return db.get_app_settings()
+
+
+@app.get("/model_info")
+def read_model_info() -> dict[str, Any]:
+    """Return model configuration and non-secret chat-key status."""
+    load_dotenv(config.ROOT_DIR / ".env")
+    fitted = model is not None and model.memory_bank is not None
+    return {
+        "backbone": config.BACKBONE,
+        "category": config.CATEGORY,
+        "bank_size": int(model.memory_bank.shape[0]) if fitted and model is not None else 0,
+        "fitted_at": db.get_setting("fitted_at"),
+        "align_enabled": config.ALIGN_ENABLED,
+        "chat_key_set": bool(os.environ.get("ANTHROPIC_API_KEY")),
+    }
+
+
+@app.post("/reset_log")
+def reset_log() -> dict[str, int]:
+    """Delete inspection logs, their saved frames, and alerts only."""
+    with db.session() as connection:
+        saved_files = connection.execute(
+            "SELECT frame_path, heatmap_path FROM inspections WHERE frame_path IS NOT NULL OR heatmap_path IS NOT NULL"
+        ).fetchall()
+        inspections_deleted = connection.execute("DELETE FROM inspections").rowcount
+        alerts_deleted = connection.execute("DELETE FROM alerts").rowcount
+
+    frame_root = config.FRAMES_DIR.resolve()
+    for row in saved_files:
+        for field in ("frame_path", "heatmap_path"):
+            if not row[field]:
+                continue
+            saved_path = Path(row[field]).resolve()
+            try:
+                saved_path.relative_to(frame_root)
+            except ValueError:
+                continue
+            if saved_path.is_file():
+                saved_path.unlink()
+
+    return {
+        "inspections_deleted": max(inspections_deleted, 0),
+        "alerts_deleted": max(alerts_deleted, 0),
+        "rows_deleted": max(inspections_deleted, 0) + max(alerts_deleted, 0),
     }
 
 

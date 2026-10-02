@@ -113,3 +113,6 @@
 .lens-hero .hero-feature-bottle{right:25%}
 @media(max-width:820px){.lens-hero .hero-feature-bottle{right:18%}}
 @media(max-width:560px){.lens-hero .hero-feature-bottle{right:auto}}
+
+.settings-panel h3{margin:5px 0 12px}.settings-panel .setting-row{min-height:38px;border-bottom:1px solid #edf1f4;font-size:11px}.settings-panel .setting-row b{font-size:10px;text-align:right}.settings-input-row{display:flex;align-items:center;justify-content:space-between;gap:12px;min-height:48px;border-bottom:1px solid #edf1f4;color:#60758a;font-size:11px;font-weight:600}.settings-input-row input{width:94px;height:34px;border:1px solid #cbd7e1;border-radius:6px;padding:0 9px;color:#263c51;background:#fff}.settings-action{margin-top:15px}.align-note{margin:7px 0 0}.settings-error,.settings-notice{font-size:11px;line-height:1.5;margin:10px 0 0}.settings-error{color:#bd3339}.settings-notice{color:#188052}.support-card{display:none}
+
