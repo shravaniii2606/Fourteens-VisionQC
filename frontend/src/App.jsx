@@ -114,18 +114,111 @@ function InspectionHero() {
   </section>;
 }
 
+function CrackHealingSection() {
+  const wrapperRef = useRef(null);
+  const stickyRef = useRef(null);
+  const progressRef = useRef(null);
+  const scoreRef = useRef(null);
+  const verdictRef = useRef(null);
+  const statusRef = useRef(null);
+  const lensRef = useRef(null);
+  const zoomRef = useRef(null);
+  const heatRef = useRef(null);
+  const hintRef = useRef(null);
+  const pRef = useRef(0);
+
+  const setProgress = (rawProgress) => {
+    const wrapper = wrapperRef.current;
+    if (!wrapper) return;
+    const p = Math.max(0, Math.min(1, Number(rawProgress) || 0));
+    pRef.current = p;
+    wrapper.style.setProperty('--p', p);
+    wrapper.style.setProperty('--progress-percent', `${p * 100}%`);
+    if (progressRef.current) progressRef.current.value = String(p * 100);
+    const heal = Math.max(0, Math.min(1, (p - .12) / .78));
+    const eased = heal * heal * (3 - 2 * heal);
+    wrapper.querySelectorAll('.cA').forEach((path) => { path.style.strokeDasharray = `0 ${eased} 1`; });
+    wrapper.querySelectorAll('.cB').forEach((path) => { path.style.strokeDasharray = `${1 - eased} 1`; });
+    if (heatRef.current) heatRef.current.style.opacity = String(1 - eased);
+    const lensX = 190, lensY = 262 + 90 * Math.max(0, Math.min(1, p / .9));
+    lensRef.current?.setAttribute('transform', `translate(${lensX} ${lensY})`);
+    zoomRef.current?.setAttribute('transform', `scale(1.8) translate(${-lensX} ${-lensY})`);
+    const score = Math.round(87 - 75 * eased);
+    if (scoreRef.current) scoreRef.current.textContent = String(score);
+    const verdict = score >= 60 ? 'FAIL' : score >= 30 ? 'CHECKING' : 'PASS';
+    if (verdictRef.current) { verdictRef.current.textContent = verdict; verdictRef.current.dataset.state = verdict.toLowerCase(); }
+    if (statusRef.current) statusRef.current.textContent = p < .33 ? 'Surface crack found' : p < .66 ? 'Comparing defect against known-good units' : 'Crack healed; unit passes inspection';
+    if (hintRef.current) hintRef.current.style.opacity = String(p > .04 ? 0 : 1);
+    wrapper.querySelectorAll('.healing-step').forEach((step) => { const index = Number(step.dataset.step); step.dataset.active = String(index === (p < .33 ? 0 : p < .66 ? 1 : 2)); });
+    wrapper.querySelectorAll('.healing-milestone').forEach((point) => { const active = p >= Number(point.dataset.progress) - .001; point.dataset.complete = String(active); point.classList.toggle('on', active); });
+  };
+
+  useEffect(() => {
+    const wrapper = wrapperRef.current, sticky = stickyRef.current;
+    if (!wrapper || !sticky) return undefined;
+    const reducedQuery = window.matchMedia('(prefers-reduced-motion: reduce)');
+    let reduced = reducedQuery.matches, frame = 0;
+    const navHeight = () => window.matchMedia('(max-width: 560px)').matches ? 58 : 68;
+    const updateFromScroll = () => {
+      frame = 0;
+      if (reduced) return;
+      const wrapperTop = wrapper.getBoundingClientRect().top + window.scrollY;
+      const stickyTop = navHeight();
+      const travel = Math.max(1, wrapper.offsetHeight - sticky.offsetHeight);
+      setProgress((window.scrollY - (wrapperTop - stickyTop)) / travel);
+    };
+    const requestUpdate = () => { if (!frame) frame = requestAnimationFrame(updateFromScroll); };
+    const onReduceChange = (event) => {
+      reduced = event.matches;
+      wrapper.dataset.reducedMotion = String(reduced);
+      if (reduced) { if (frame) cancelAnimationFrame(frame); frame = 0; }
+      else requestUpdate();
+      setProgress(pRef.current);
+    };
+    wrapper.dataset.reducedMotion = String(reduced);
+    if (reduced) setProgress(0); else requestUpdate();
+    window.addEventListener('scroll', requestUpdate, { passive: true });
+    window.addEventListener('resize', requestUpdate);
+    reducedQuery.addEventListener?.('change', onReduceChange);
+    return () => { if (frame) cancelAnimationFrame(frame); window.removeEventListener('scroll', requestUpdate); window.removeEventListener('resize', requestUpdate); reducedQuery.removeEventListener?.('change', onReduceChange); };
+  }, []);
+
+  const jumpTo = (progress) => {
+    const wrapper = wrapperRef.current, sticky = stickyRef.current;
+    if (!wrapper || !sticky) return;
+    if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) { setProgress(progress); return; }
+    const wrapperTop = wrapper.getBoundingClientRect().top + window.scrollY;
+    const travel = Math.max(1, wrapper.offsetHeight - sticky.offsetHeight);
+    window.scrollTo({ top: wrapperTop - (window.matchMedia('(max-width: 560px)').matches ? 58 : 68) + progress * travel, behavior: 'smooth' });
+  };
+
+  return <div className="crack-heal-wrapper" id="how-it-works" ref={wrapperRef}>
+    <section className="heal-section crack-heal-panel" ref={stickyRef} aria-label="Crack healing inspection demonstration">
+      <div className="heal-copy"><span className="eyebrow">A defect you can watch disappear</span><h2>Crack-healing scrollbar</h2><p>See defects disappear as you scroll. VisionQC learns the difference between a harmless mark and a real quality issue.</p>
+        <div className="stage-list"><div className="healing-step" data-step="0" data-active="true"><span>01</span><b>Detect</b><small>Surface crack found</small></div><div className="healing-step" data-step="1"><span>02</span><b>Analyze</b><small>Compare to normal units</small></div><div className="healing-step" data-step="2"><span>03</span><b>Decide</b><small>Clear, confident results</small></div></div>
+      </div>
+      <div className="heal-visual"><div className="heal-bottle-wrap">
+        <svg className="healing-bottle" viewBox="0 0 360 520" aria-hidden="true"><defs><linearGradient id="heal-steel-body" x1="0" x2="1"><stop offset="0" stopColor="#8fa1b5"/><stop offset=".22" stopColor="#e9eff5"/><stop offset=".5" stopColor="#bcc9d6"/><stop offset=".8" stopColor="#8396ab"/><stop offset="1" stopColor="#aebccb"/></linearGradient><radialGradient id="heal-heat"><stop stopColor="#ef4444" stopOpacity=".55"/><stop offset=".55" stopColor="#f59e0b" stopOpacity=".22"/><stop offset="1" stopColor="#f59e0b" stopOpacity="0"/></radialGradient><filter id="heal-shadow" x="-30%" y="-30%" width="160%" height="160%"><feDropShadow dx="0" dy="8" stdDeviation="8" floodColor="#0f2f5e" floodOpacity=".25"/></filter><clipPath id="heal-lens-clip"><circle r="58"/></clipPath><g id="healing-bottle-shape"><ellipse cx="180" cy="488" rx="92" ry="12" fill="#a9bbd0" opacity=".6"/><rect x="142" y="26" width="76" height="62" rx="9" fill="url(#heal-steel-body)" stroke="#8396ab" strokeWidth="2"/><rect x="124" y="86" width="112" height="42" rx="14" fill="url(#heal-steel-body)" stroke="#8396ab" strokeWidth="2"/><path d="M110 160Q110 134 138 130H222Q250 134 250 160V440Q250 472 218 472H142Q110 472 110 440Z" fill="url(#heal-steel-body)" stroke="#8396ab" strokeWidth="2"/><rect x="122" y="150" width="9" height="300" rx="4.5" fill="#fff" opacity=".55"/><path d="M112 440Q112 458 142 458H218Q248 458 248 440" fill="none" stroke="#7d90a6" strokeWidth="2" opacity=".5"/></g></defs>
+          <use href="#healing-bottle-shape" filter="url(#heal-shadow)"/><ellipse className="crack-heat" ref={heatRef} cx="180" cy="318" rx="70" ry="100" fill="url(#heal-heat)"/>
+          <g fill="none" stroke="#e5484d" strokeWidth="3.6" strokeLinejoin="round" strokeLinecap="butt"><path className="cA" pathLength="1" d="M206 230 181 266 198 290 172 318"/><path className="cB" pathLength="1" d="M172 318 188 344 160 380 174 404"/></g>
+          <g ref={lensRef} className="lens-glass"><g clipPath="url(#heal-lens-clip)"><rect x="-60" y="-60" width="120" height="120" fill="#f4f8fc"/><g ref={zoomRef}><use href="#healing-bottle-shape"/><g fill="none" stroke="#e5484d" strokeWidth="3.6" strokeLinejoin="round" strokeLinecap="butt"><path className="cA" pathLength="1" d="M206 230 181 266 198 290 172 318"/><path className="cB" pathLength="1" d="M172 318 188 344 160 380 174 404"/></g></g></g><circle r="58" fill="#ffffff1f" stroke="#7fb3e0" strokeWidth="3" filter="url(#heal-shadow)"/><path d="M-8 0H8M0 -8V8" stroke="#2f7fd1" strokeWidth="1.5" opacity=".6"/></g>
+        </svg>
+      </div><div className="crack-readout"><small>Anomaly score</small><strong ref={scoreRef}>87</strong><span className="verdict-chip" data-state="fail" ref={verdictRef}>FAIL</span></div><p className="healing-description" aria-live="polite" ref={statusRef}>Surface crack found</p>
+      <div className="heal-stages"><div className="healing-milestones"><button className="healing-milestone on" data-progress="0" data-complete="true" onClick={()=>jumpTo(0)}>0% (cracked)</button><ArrowRight/><button className="healing-milestone" data-progress="0.25" onClick={()=>jumpTo(.25)}>25%</button><ArrowRight/><button className="healing-milestone" data-progress="0.5" onClick={()=>jumpTo(.5)}>50%</button><ArrowRight/><button className="healing-milestone" data-progress="1" onClick={()=>jumpTo(1)}>100% (clean)</button></div><div className="healing-track"><span className="healing-track-fill"/></div><label className="reduced-heal-control">Scrub healing progress<input ref={progressRef} type="range" min="0" max="100" step="1" defaultValue="0" aria-label="Scrub crack healing progress" onInput={(event)=>setProgress(Number(event.currentTarget.value)/100)}/></label></div>
+      </div>
+      <p className="heal-hint" ref={hintRef}>Scroll to heal the crack ↓</p>
+    </section>
+  </div>;
+}
+
 function Landing() {
-  const { scrollYProgress } = useScroll();
-  const healing = useTransform(scrollYProgress, [0.24, 0.43], [1, 0]);
-  const crackOpacity = useTransform(healing, [0, 0.15, 1], [0, 0.28, 1]);
-  const crackDash = useTransform(healing, (v) => 1 - v);
   return <div className="landing">
-    <header className="public-nav"><Brand/><nav aria-label="Main navigation"><a href="#product">Home</a><a href="#product">Product</a><a href="#solutions">Solutions</a><a href="#numbers">Pricing</a><a href="#resources">Resources</a></nav><Link className="button outline nav-login" to="/login">Login</Link></header>
+    <header className="public-nav"><Brand/><nav aria-label="Main navigation"><a href="#product">Home</a><a href="#product">Product</a><a href="#solutions">Solutions</a><a href="#numbers">Performance</a><a href="#resources">Resources</a></nav><Link className="button outline nav-login" to="/login">Login</Link></header>
     <InspectionHero/>
-    <section className="heal-section" id="how-it-works"><div className="heal-copy"><span className="eyebrow">A defect you can watch disappear</span><h2>Crack-healing scrollbar</h2><p>See defects disappear as you scroll. VisionQC learns the difference between a harmless mark and a real quality issue.</p><div className="stage-list"><span>01 <b>Detect</b><small>Surface crack found</small></span><span>02 <b>Analyze</b><small>Compare to normal units</small></span><span>03 <b>Decide</b><small>Clear, confident results</small></span></div></div><div className="heal-visual"><div className="heal-bottle-wrap"><Bottle className="hero-bottle"/><motion.svg className="crack-overlay" viewBox="0 0 200 400" aria-hidden="true"><motion.path d="M115 174l-16 20 19 14-20 23 16 18-15 22" pathLength={1} fill="none" stroke="#e5484d" strokeWidth="3" strokeLinecap="round" style={{ opacity: crackOpacity, strokeDasharray: 1, strokeDashoffset: crackDash }}/></motion.svg><motion.div className="magnifier" style={{ opacity: useTransform(healing, [0,1], [1,.3]) }}><span/></motion.div></div><div className="heal-stages"><span>0% (cracked)</span><ArrowRight/><span>25%</span><ArrowRight/><span>50%</span><ArrowRight/><span>100% (clean)</span></div><div className="scroll-marker"><span className="scroll-line"/><span className="scroll-knob"/><small>Scroll to heal</small></div></div></section>
-    <section className="how-section" id="solutions"><SectionTitle eyebrow="Simple by design" title="Quality control, made practical" description="A reliable inspection workflow your team can learn in minutes."/><div className="step-grid">{[[Database,'01','Teach','Show VisionQC 25 good product photos. It learns what normal looks like.'],[ScanLine,'02','Inspect','Use a live camera or recorded video to check each unit.'],[CheckCircle2,'03','Decide','Get an anomaly heatmap, confidence score and clear verdict.']].map(([Icon,num,title,copy])=><Card className="step-card" key={num}><div className="step-icon"><Icon/></div><span className="step-number">{num}</span><h3>{title}</h3><p>{copy}</p></Card>)}</div></section>
-    <section className="feature-section" id="resources"><SectionTitle eyebrow="Built for real factories" title="Everything your line needs" description="Practical quality tools, from the first good sample to the next shift."/><div className="feature-grid">{[['Heatmap','See exactly where an anomaly appears.'],['Auto threshold','Tune sensitivity using your calibration range.'],['Capture checks','Catch dark, blurry or shifted frames early.'],['Auto-align','Keep product framing consistent between units.'],['Repeat defect alert','Find recurring faults before they spread.'],['False alarm learning','Teach the model from supervisor feedback.'],['DriftGuard','Know when your camera or process changes.'],['Ask the Log','Get answers from your inspection history.']].map(([t,d])=><Card className="feature-card" key={t}><CheckCircle2 size={18}/><div><h3>{t}</h3><p>{d}</p></div></Card>)}</div></section>
-    <section className="numbers-section" id="numbers"><SectionTitle eyebrow="Measured performance" title="Quality you can quantify"/><div className="numbers-grid">{[['AUROC',evaluation.auroc],['Detection rate',evaluation.detectionRate],['False alarm rate',evaluation.falseAlarmRate]].map(([a,b])=><Card key={a}><span>{a}</span><strong>{b}</strong></Card>)}</div></section><footer className="public-footer"><Brand/><span>Secure <i/> Reliable <i/> Built for Industry</span><small>© 2026 VisionQC</small></footer>
+    <CrackHealingSection/>
+    <section className="how-section" id="solutions"><SectionTitle eyebrow="Simple by design" title="Quality control, made practical" description="A reliable inspection workflow your team can learn in minutes."/><div className="step-grid">{[[Database,'01','Teach','Show VisionQC 25 good product photos. It learns what normal looks like.'],[ScanLine,'02','Inspect','Use a live camera or recorded video to check each unit.'],[CheckCircle2,'03','Decide','Get an anomaly heatmap, confidence score and clear verdict.']].map(([Icon,num,title,copy])=><Card className={`step-card step-card-${title.toLowerCase()}`} key={num}><span className="step-number">{num}</span><div className={`step-art step-art-${title.toLowerCase()}`} aria-hidden="true"><div className="step-art-scene"><Icon size={title==='Inspect'?52:44}/>{title==='Teach'&&<div className="sample-stack"><i/><i/><i/><i/></div>}{title==='Inspect'&&<span className="inspection-beam"/>}{title==='Decide'&&<div className="heatmap-orb"><span/></div>}</div>{title==='Decide'&&<div className="result-check"><CheckCircle2 size={22}/></div>}</div><h3>{title}</h3><p>{copy}</p></Card>)}</div></section>
+    <section className="feature-section" id="resources"><div className="feature-heading"><span className="eyebrow">Built for real factories</span><h2>Everything your <span>line</span> needs</h2><p>Practical quality tools, from the first good sample to the next shift.</p></div><div className="feature-grid">{[[Image,'Heatmap','See exactly where an anomaly appears.','Detect','heatmap'],[SlidersHorizontal,'Auto threshold','Tune sensitivity using your calibration range.','Tune','threshold'],[ScanLine,'Capture checks','Catch dark, blurry or shifted frames early.','Monitor','capture'],[AlignCenter,'Auto-align','Keep product framing consistent between units.','Tune','align'],[Grid2X2,'Repeat defect alert','Find recurring faults before they spread.','Detect','repeat'],[ShieldCheck,'False alarm learning','Teach the model from supervisor feedback.','Tune','memory'],[Activity,'DriftGuard','Know when your camera or process changes.','Monitor','drift'],[MessageSquareText,'Ask the Log','Get answers from your inspection history.','Ask','ask']].map(([Icon,title,copy,tag,visual],index)=><Card className={`feature-card feature-${visual}`} key={title} style={{'--feature-delay':`${index*85}ms`}}><div className="feature-card-head"><span className="feature-icon"><Icon size={18}/></span><span className="feature-tag">{tag}</span></div><h3>{title}</h3><p>{copy}</p><div className={`feature-mini mini-${visual}`} aria-hidden="true">{visual==='heatmap'&&<div className="heatmap-product"><i/></div>}{visual==='threshold'&&<div className="threshold-demo"><span/><i/></div>}{visual==='capture'&&<div className="capture-chips"><span>Too dark</span><span>Blurry</span><span>Frame OK</span></div>}{visual==='align'&&<div className="align-demo"><i/></div>}{visual==='repeat'&&<><div className="repeat-grid">{Array.from({length:9},(_,i)=><i className={i===4?'repeat-hot':''} key={i}/>)}</div><b>x3</b></>}{visual==='memory'&&<><span className="false-alarm-demo">False alarm</span><span className="memory-added">+1 added to memory</span></>}{visual==='drift'&&<svg viewBox="0 0 180 54"><path className="drift-threshold" d="M2 35H178"/><path className="drift-line" d="M3 46 28 40 49 43 74 29 98 34 121 19 145 23 175 7"/></svg>}{visual==='ask'&&<><span className="chat-bubble-demo">Show recent defects</span><span className="chat-reply-demo">3 repeat marks found</span></>}</div></Card>)}</div></section>
+    <section className="numbers-section" id="numbers"><div className="numbers-heading"><div><div className="numbers-eyebrow"><span><BarChart3 size={17}/></span><b>Measured performance</b></div><h2>Quality you can quantify</h2><p>Track key metrics that show your inspection workflow in real numbers.</p></div></div><div className="numbers-grid">{[[BarChart3,'AUROC',evaluation.auroc,'blue'],[ScanLine,'Detection rate',evaluation.detectionRate,'teal'],[Shield,'False alarm rate',evaluation.falseAlarmRate,'violet']].map(([Icon,label,value,tone],index)=><Card className={`numbers-card numbers-${tone}`} key={label}><span className="numbers-icon"><Icon size={26}/></span><div className="numbers-metric"><span className="numbers-label">{label}</span><strong>{value}</strong><small>Current evaluation</small></div><svg className="numbers-sparkline" viewBox="0 0 110 54" aria-hidden="true"><path d={index===2?'M4 14 C18 17 20 29 34 23 S52 35 66 29 S84 40 106 46':index===1?'M4 42 C18 39 20 25 34 32 S54 20 68 24 S89 15 106 8':'M4 42 C18 39 19 20 34 27 S51 39 66 24 S88 28 106 9'}/><circle cx="106" cy={index===2?'46':index===1?'8':'9'} r="3.5"/></svg></Card>)}</div></section><footer className="public-footer"><Brand/><span>Secure <i/> Reliable <i/> Built for Industry</span><small>© 2026 VisionQC</small></footer>
   </div>;
 }
 
