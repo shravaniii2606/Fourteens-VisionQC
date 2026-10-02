@@ -26,6 +26,15 @@ def _recapture(reason: str, debug: dict[str, Any] | None = None) -> dict[str, An
     }
 
 
+def _inspection_debug(capture: dict[str, Any], aligned: dict[str, Any] | None = None) -> dict[str, Any]:
+    """Combine capture metrics with alignment shift metrics for persistence."""
+    debug = dict(capture.get("debug") or {})
+    if aligned is not None:
+        debug["alignment_shift"] = aligned.get("shift")
+        debug["alignment_rotation"] = aligned.get("rotation")
+    return debug
+
+
 def decide(frame: np.ndarray, model: PatchCore) -> dict[str, Any]:
     """Run all inspection gates in order and return the chosen verdict."""
     capture = capture_check.check(frame)
@@ -33,7 +42,7 @@ def decide(frame: np.ndarray, model: PatchCore) -> dict[str, Any]:
         return _recapture(capture["reason"], capture.get("debug"))
     aligned = alignment.align(frame)
     if not aligned["ok"]:
-        return _recapture(aligned["reason"], capture.get("debug"))
+        return _recapture(aligned["reason"], _inspection_debug(capture, aligned))
     working_frame = aligned["aligned_image"]
     try:
         result = model.score(working_frame)
@@ -47,7 +56,7 @@ def decide(frame: np.ndarray, model: PatchCore) -> dict[str, Any]:
     low_threshold = max(config.SPREAD_THRESHOLD * max(threshold, 1e-6), model.calibration.get("mean", 0.0))
     spread = float(np.mean(anomaly_map > low_threshold))
     if spread > config.SPREAD_FRACTION:
-        return _recapture("Whole image looks off, check lighting or position", capture.get("debug"))
+        return _recapture("Whole image looks off, check lighting or position", _inspection_debug(capture, aligned))
     verdict = "FAIL" if score > threshold else "PASS"
     reason = "Anomaly score exceeds threshold" if verdict == "FAIL" else "Within threshold"
     scaled = np.clip(anomaly_map / max(threshold * 2.0, 1e-6) * 255.0, 0, 255).astype(np.uint8)
@@ -66,5 +75,5 @@ def decide(frame: np.ndarray, model: PatchCore) -> dict[str, Any]:
         "hotspot": {"x": hotspot[0], "y": hotspot[1]},
         "heatmap_png_base64": base64.b64encode(encoded.tobytes()).decode("ascii"),
         "aligned_frame": working_frame,
-        "debug": capture.get("debug", {}),
+        "debug": _inspection_debug(capture, aligned),
     }

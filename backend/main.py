@@ -27,6 +27,14 @@ model: PatchCore | None = None
 model_error: str | None = None
 
 
+def _false_rejection_pct(calibration: dict[str, Any], threshold: float) -> float | None:
+    """Return the share of leave-one-out good scores above the active cutoff."""
+    scores = calibration.get("good_scores", [])
+    if not scores:
+        return None
+    return round(sum(float(score) > threshold for score in scores) / len(scores) * 100.0, 2)
+
+
 @asynccontextmanager
 async def lifespan(_: FastAPI):
     """Initialize SQLite and restore an existing bank without fitting."""
@@ -167,6 +175,7 @@ async def fit(request: Request) -> dict[str, Any]:
         "capture_calibration": capture_stats,
         "suggested_threshold": suggested,
         "threshold": suggested,
+        "false_rejection_pct": _false_rejection_pct(calibration, suggested),
     }
 
 
@@ -274,6 +283,7 @@ async def inspect(frame: UploadFile = File(...), source: str = Form("webcam")) -
         heatmap_path = config.FRAMES_DIR / f"{stem}_heatmap.png"
         heatmap_path.write_bytes(base64.b64decode(result["heatmap_png_base64"]))
     hotspot = result["hotspot"]
+    debug = result.get("debug") or {}
     inspection_id = db.add_inspection(
         source=source,
         verdict=result["verdict"],
@@ -283,6 +293,9 @@ async def inspect(frame: UploadFile = File(...), source: str = Form("webcam")) -
         hotspot=(hotspot["x"], hotspot["y"]) if hotspot else None,
         frame_path=str(frame_path),
         heatmap_path=str(heatmap_path) if heatmap_path else None,
+        brightness=debug.get("brightness"),
+        sharpness=debug.get("sharpness"),
+        alignment_shift=debug.get("alignment_shift"),
     )
     new_alerts = analytics.repeat_defect_check()
     response = {key: value for key, value in result.items() if key != "aligned_frame"}
@@ -291,21 +304,38 @@ async def inspect(frame: UploadFile = File(...), source: str = Form("webcam")) -
 
 
 @app.get("/threshold")
-def read_threshold() -> dict[str, float]:
+def read_threshold() -> dict[str, Any]:
     """Return the active supervisor threshold and calibration interval."""
     calibration = db.get_setting("calibration", {})
+    threshold = db.get_threshold()
     return {
-        "threshold": db.get_threshold(),
+        "threshold": threshold,
         "min": float(calibration.get("min", 0.0)),
-        "max": float(calibration.get("max", db.get_threshold() * 2.0)),
+        "max": float(calibration.get("max", threshold * 2.0)),
+        "calibrated": bool(calibration.get("good_scores")),
+        "false_rejection_pct": _false_rejection_pct(calibration, threshold),
     }
 
 
+@app.get("/threshold/suggestion")
+def suggest_threshold() -> dict[str, float]:
+    """Return the maximum leave-one-out good score with the configured margin."""
+    calibration = db.get_setting("calibration", {})
+    if not calibration.get("good_scores"):
+        raise HTTPException(status_code=400, detail="Fit the model first")
+    suggested = max(float(calibration["max"]) * config.THRESHOLD_MARGIN, 1e-6)
+    return {"suggested_threshold": suggested}
+
+
 @app.post("/threshold")
-def update_threshold(payload: ThresholdInput) -> dict[str, float]:
+def update_threshold(payload: ThresholdInput) -> dict[str, Any]:
     """Update the supervisor's positive score threshold."""
     db.set_threshold(payload.threshold)
-    return {"threshold": payload.threshold}
+    calibration = db.get_setting("calibration", {})
+    return {
+        "threshold": payload.threshold,
+        "false_rejection_pct": _false_rejection_pct(calibration, payload.threshold),
+    }
 
 
 @app.post("/feedback/{inspection_id}")
@@ -337,7 +367,24 @@ def read_stats() -> dict[str, Any]:
     result = analytics.stats()
     calibration = db.get_setting("calibration", {})
     result["drift"] = analytics.drift(calibration.get("mean"))
+    result["capture_health"] = result["drift"]["capture_health"]
+    result["capture_baseline"] = result["drift"]["capture_baseline"]
     return result
+
+
+@app.get("/driftguard/status")
+def driftguard_status() -> dict[str, Any]:
+    """Return the complete DriftGuard rolling-window status."""
+    calibration = db.get_setting("calibration", {})
+    return analytics.drift(calibration.get("mean"))
+
+
+@app.post("/driftguard/reset")
+def reset_driftguard() -> dict[str, Any]:
+    """Start a fresh DriftGuard window without deleting inspection history."""
+    reset_at = datetime.now(timezone.utc).isoformat(timespec="seconds")
+    db.set_setting("drift_reset_at", reset_at)
+    return {"reset_at": reset_at, "minimum_needed": config.DRIFT_MIN_PASSED, "units_used": 0}
 
 
 @app.get("/history")
@@ -350,7 +397,27 @@ def history(limit: int = 20) -> list[dict[str, Any]]:
 
 @app.get("/cumulative_heatmap")
 def read_cumulative_heatmap() -> dict[str, Any]:
-    """Return the latest repeat-defect count grid."""
+    """Return the latest repeat-defect grid with cell and alert metadata."""
+    return analytics.cumulative_heatmap()
+
+
+@app.post("/repeat-defect/demo")
+def seed_repeat_defect_demo() -> dict[str, Any]:
+    """Create five same-location failures so the repeat-defect alert is demoable."""
+    settings = db.get_app_settings()
+    db.set_setting("show_seed", True)
+    for index in range(5):
+        db.add_inspection(
+            source="seed",
+            verdict="FAIL",
+            reason="Anomaly score exceeds threshold",
+            score=2.0 + index * 0.1,
+            confidence=0.0,
+            hotspot=(0.45, 0.45),
+            frame_path=None,
+            heatmap_path=None,
+        )
+    analytics.repeat_defect_check(window=int(settings["window_n"]), required=int(settings["cluster_k"]))
     return analytics.cumulative_heatmap()
 
 

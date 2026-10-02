@@ -52,6 +52,10 @@ def connect() -> sqlite3.Connection:
         CREATE INDEX IF NOT EXISTS alerts_cell_ts_idx ON alerts(cell_x, cell_y, ts);
         """
     )
+    columns = {row["name"] for row in connection.execute("PRAGMA table_info(inspections)").fetchall()}
+    for name in ("brightness", "sharpness", "alignment_shift"):
+        if name not in columns:
+            connection.execute(f"ALTER TABLE inspections ADD COLUMN {name} REAL")
     connection.execute(
         "INSERT OR IGNORE INTO settings(key, value) VALUES('threshold', ?)",
         (str(config.DEFAULT_THRESHOLD),),
@@ -88,17 +92,21 @@ def add_inspection(
     hotspot: tuple[float, float] | None,
     frame_path: str | None,
     heatmap_path: str | None,
+    brightness: float | None = None,
+    sharpness: float | None = None,
+    alignment_shift: float | None = None,
 ) -> int:
     """Insert one inspection and return its database id."""
     timestamp = datetime.now(timezone.utc).isoformat(timespec="seconds")
     with session() as connection:
         cursor = connection.execute(
             """INSERT INTO inspections
-               (ts, source, verdict, reason, score, confidence, hotspot_x, hotspot_y, frame_path, heatmap_path)
-               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+               (ts, source, verdict, reason, score, confidence, hotspot_x, hotspot_y, frame_path, heatmap_path,
+                brightness, sharpness, alignment_shift)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
             (timestamp, source, verdict, reason, score, confidence,
              hotspot[0] if hotspot else None, hotspot[1] if hotspot else None,
-             frame_path, heatmap_path),
+             frame_path, heatmap_path, brightness, sharpness, alignment_shift),
         )
         return int(cursor.lastrowid)
 

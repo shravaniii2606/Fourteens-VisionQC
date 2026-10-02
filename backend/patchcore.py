@@ -27,7 +27,7 @@ class PatchCore:
         self.memory_bank: torch.Tensor | None = None
         self.grid_size: tuple[int, int] | None = None
         self.category = config.CATEGORY
-        self.calibration: dict[str, float] = {}
+        self.calibration: dict[str, Any] = {}
         if self.bank_path.exists():
             self.load()
 
@@ -163,7 +163,7 @@ class PatchCore:
         self.save()
         return int(self.memory_bank.shape[0])
 
-    def calibrate(self, good_images: list[Image.Image | np.ndarray]) -> dict[str, float]:
+    def calibrate(self, good_images: list[Image.Image | np.ndarray]) -> dict[str, Any]:
         """Estimate normal-score spread with leave-one-image-out comparisons."""
         if len(good_images) < 2:
             raise ValueError("At least two good images are needed for calibration")
@@ -179,6 +179,7 @@ class PatchCore:
             "max": float(values.max()),
             "mean": float(values.mean()),
             "std": float(values.std()),
+            "good_scores": [float(value) for value in values.tolist()],
         }
         self.save()
         return self.calibration.copy()
@@ -217,4 +218,7 @@ class PatchCore:
         self.memory_bank = saved["memory_bank"].float()
         self.grid_size = tuple(saved["grid_size"]) if saved.get("grid_size") else None
         self.category = str(saved.get("category", config.CATEGORY))
-        self.calibration = {key: float(value) for key, value in saved.get("calibration", {}).items()}
+        self.calibration = {
+            key: ([float(item) for item in value] if key == "good_scores" else float(value))
+            for key, value in saved.get("calibration", {}).items()
+        }

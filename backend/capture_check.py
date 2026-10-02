@@ -43,8 +43,10 @@ def calibrate_capture(good_images: list[np.ndarray]) -> dict[str, float]:
         dark_pixel_fractions.append(float(np.mean(gray <= 3)))
         bright_pixel_fractions.append(float(np.mean(gray >= 252)))
     result = {
+        "brightness_mean": float(np.mean(brightness)),
         "brightness_min": max(0.0, min(brightness) - 3.0),
         "brightness_max": min(255.0, max(brightness) + 3.0),
+        "sharpness_mean": float(np.mean(sharpness)),
         "sharpness_min": min(sharpness) * 0.5,
         "texture_min": max(4.0, min(texture) * 0.35),
         "dark_pixel_max": min(1.0, max(dark_pixel_fractions) + config.CAPTURE_PIXEL_FRACTION_MARGIN),
