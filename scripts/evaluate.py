@@ -37,7 +37,7 @@ def main() -> None:
     model.category = args.category
     fit_stats = model.fit(good_images)
     calibration = model.calibrate(good_images)
-    threshold = calibration["max"] + max(calibration["std"] * 0.05, 1e-6)
+    threshold = max(calibration["max"] * config.THRESHOLD_MARGIN, 1e-6)
 
     labels: list[int] = []
     scores: list[float] = []

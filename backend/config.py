@@ -11,6 +11,7 @@ INPUT_SIZE = 224  # Crop size after resizing the short edge to 256.
 MAX_BANK_PATCHES = 20_000  # Upper bound for nearest-neighbour reference patches.
 DISTANCE_CHUNK_SIZE = 128  # Query patches processed together during torch.cdist.
 FIT_MAX_IMAGES = 30  # Maximum normal examples used for fit and evaluation.
+THRESHOLD_MARGIN = 1.15  # Multiply the worst leave-one-out good score for the suggested cutoff.
 HISTORY_MAX_LIMIT = 500  # Largest page of inspection history returned by the API.
 DASHBOARD_TREND_POINTS = 100  # Recent score points shown in the dashboard chart.
 ANALYTICS_SCAN_LIMIT = 5_000  # Recent rows scanned by hotspot and drift analytics.

@@ -80,6 +80,14 @@ python scripts\evaluate.py --category bottle
 
 The script fits on up to 30 good training photos and evaluates every test image, printing AUROC, detection rate at the calibration-derived threshold, and false alarm rate. Evaluation writes the same local memory bank as the app.
 
+To fit directly from a good-only video and immediately replay it through the live inspection endpoint:
+
+```powershell
+.\.venv\Scripts\python.exe scripts\fit_from_video.py path\to\good_clip.mp4 --frames 30
+```
+
+The utility samples evenly spaced frames, encodes them as JPEG at the browser capture quality, posts them to `/fit`, then replays the same clip through `/inspect` at three frames per second. It prints capture thresholds and the recapture/pass/fail percentages. Use a clip containing only known-good product frames for fitting.
+
 ## Seed dashboard data
 
 ```powershell

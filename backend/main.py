@@ -105,8 +105,9 @@ def _read_pil(raw: bytes) -> Image.Image:
 
 @app.post("/fit")
 async def fit(request: Request) -> dict[str, Any]:
-    """Fit and calibrate from uploads or category/train/good."""
+    """Fit and calibrate from uploads, live JPEG frames, or category/train/good."""
     uploads: list[bytes] = []
+    live_frames: list[np.ndarray] = []
     use_dataset = False
     content_type = request.headers.get("content-type", "")
     if "application/json" in content_type:
@@ -120,6 +121,9 @@ async def fit(request: Request) -> dict[str, Any]:
         for entry in form.getlist("files"):
             if isinstance(entry, StarletteUploadFile):
                 uploads.append(await entry.read())
+        for entry in form.getlist("frames") + form.getlist("frame"):
+            if isinstance(entry, StarletteUploadFile):
+                live_frames.append(_decode_image(await entry.read()))
     if use_dataset:
         good_dir = config.DATA_DIR / "mvtec" / config.CATEGORY / "train" / "good"
         paths = sorted(path for path in good_dir.glob("*") if path.suffix.lower() in (".png", ".jpg", ".jpeg", ".bmp"))[:config.FIT_MAX_IMAGES]
@@ -131,6 +135,8 @@ async def fit(request: Request) -> dict[str, Any]:
                 images.append(Image.open(path).convert("RGB"))
             except (UnidentifiedImageError, OSError) as error:
                 raise HTTPException(status_code=400, detail=f"Could not read {path.name}") from error
+    elif live_frames:
+        images = live_frames[:config.FIT_MAX_IMAGES]
     else:
         if not uploads:
             raise HTTPException(status_code=400, detail="Upload good photos or choose Fit from dataset")
@@ -148,8 +154,7 @@ async def fit(request: Request) -> dict[str, Any]:
         raise HTTPException(status_code=400, detail=str(error)) from error
     reference = raw_images[0]
     cv2.imwrite(str(config.DATA_DIR / "reference.jpg"), cv2.cvtColor(reference, cv2.COLOR_RGB2BGR))
-    margin = max(calibration["std"] * 0.05, 1e-6)
-    suggested = calibration["max"] + margin
+    suggested = max(calibration["max"] * config.THRESHOLD_MARGIN, 1e-6)
     db.set_threshold(suggested)
     db.set_setting("calibration", calibration)
     return {
