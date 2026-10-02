@@ -1,29 +1,22 @@
 # VisionQC
 
-A local visual-defect inspection demo. It builds a PatchCore-style normal memory bank from good images, then scores camera or video frames on the same machine using CPU inference.
+VisionQC is a local visual quality inspection demo for small factories. It learns what a good product looks like from example images, then checks images or video frames for visual anomalies and reports a score, heatmap, and inspection verdict.
 
-## Requirements
+## Project Overview
 
-- Python 3.11 (the source can be syntax-checked on Python 3.12; install dependencies into Python 3.11 for the requested runtime).
-- Node.js and npm.
-- A webcam is optional. An MVTec AD download is only needed for dataset fitting/evaluation; alternatively upload at least two good photos.
-- The first model startup downloads torchvision's pretrained weights if they are not already cached. Thereafter the memory bank and database are local. Chat calls OpenRouter and requires an API key; all other workflows run locally.
+The project includes a React web interface and a FastAPI backend. The backend builds a PatchCore-style memory bank of features from known-good examples and compares each inspected frame against that reference. Inspection records, settings, and analytics are stored locally in SQLite. Most inspection workflows run on the same machine; the optional Ask the Log feature uses OpenRouter.
 
-## Frontend
+## Setup & Installation Instructions
 
-The React + Vite frontend runs at `http://localhost:5173` and expects the FastAPI backend at `http://localhost:8000` by default. Copy `frontend/.env.example` to `frontend/.env` and set `VITE_API_URL` to configure another API origin.
+### Requirements
 
-```powershell
-cd frontend
-npm install
-npm run dev
-```
+- Python 3.11
+- Node.js and npm
+- Windows PowerShell commands below (adapt activation commands for your shell if needed)
+- Optional: webcam for live capture, and MVTec AD for dataset fitting/evaluation
+- Optional: OpenRouter API key for Ask the Log
 
-Create a production bundle with `npm run build`. The UI's login is demo-only: any valid email and non-empty password opens the local demo workspace. Replace it with real authentication before production use.
-
-## Install
-
-From the repository root, create/activate a Python 3.11 virtual environment and install the CPU PyTorch build plus backend requirements:
+Create a Python virtual environment from the repository root and install the CPU PyTorch build and backend dependencies:
 
 ```powershell
 py -3.11 -m venv .venv
@@ -33,25 +26,87 @@ python -m pip install torch torchvision --index-url https://download.pytorch.org
 python -m pip install -r backend\requirements.txt
 ```
 
-For OpenRouter chat, add your key to the root `.env` file:
+Install frontend packages and configure the API origin if it differs from the default:
+
+```powershell
+cd frontend
+npm install
+Copy-Item .env.example .env
+```
+
+Set `VITE_API_URL` in `frontend/.env` to the backend URL when needed. By default, the frontend uses `http://localhost:8000`.
+
+For Ask the Log, create a root `.env` file with:
 
 ```text
 OPENROUTER_API_KEY=your-openrouter-api-key
 ```
 
-The default model is `openai/gpt-4o-mini`. Change `OPENROUTER_MODEL` in `backend/config.py` to another model enabled for your OpenRouter account. Restart the backend after editing `.env`.
+The default model is `openai/gpt-4o-mini`. `OPENROUTER_MODEL` can be changed in `backend/config.py`. Restart the backend after changing configuration.
 
-Install the frontend packages:
+### Run locally
+
+Start the backend in one repository-root terminal:
+
+```powershell
+.\.venv\Scripts\Activate.ps1
+python -m uvicorn backend.main:app --reload --host 127.0.0.1 --port 8000
+```
+
+Start the frontend in another terminal:
 
 ```powershell
 cd frontend
-npm install
-cd ..
+npm run dev
 ```
 
-## MVTec AD
+Open [http://localhost:5173](http://localhost:5173). Choose **Fit from dataset** or upload at least two good product photos before inspection. Browser camera access requires permission and works on localhost. Video is read in the browser and sent frame by frame. The first model startup may download pretrained torchvision weights; later model state and database data are stored locally under `data/`.
 
-Download the MVTec Anomaly Detection dataset from [MVTec's official AD dataset page](https://www.mvtec.com/company/research/datasets/mvtec-ad). Extract the `bottle` category so the paths are:
+Create a production frontend bundle with `npm run build` from `frontend/`.
+
+## Key Features
+
+- Teach the model from good images or the MVTec AD dataset.
+- Inspect webcam frames, uploaded images, or video frames.
+- Show anomaly scores, confidence, anomaly heatmaps, and pass/fail/recapture decisions.
+- Check image capture quality, including brightness, blur, and framing.
+- Tune an inspection threshold and review its calibration information.
+- Review inspection history, dashboard metrics, alerts, repeat-defect heatmaps, and DriftGuard status.
+- Provide feedback on a result to help identify false alarms.
+- Ask questions about logged inspection data with the optional OpenRouter-backed chat.
+- Demonstrate crack healing in the landing page as a visual explanation of anomaly scoring.
+
+## Technology Stack
+
+| Area | Technologies |
+| --- | --- |
+| Frontend | React, Vite, React Router, Recharts, Lucide icons, plain CSS |
+| Backend | Python, FastAPI, Uvicorn, Pydantic |
+| Computer vision and ML | PyTorch, torchvision, OpenCV, NumPy, Pillow; PatchCore-style feature memory and nearest-neighbor scoring |
+| Storage | SQLite for inspection logs and application data; local files under `data/` for model memory and frames |
+| Optional language model | OpenAI-compatible client connected to OpenRouter |
+| Dataset | MVTec Anomaly Detection (MVTec AD), `bottle` category by default |
+
+## Architecture / Workflow
+
+```text
+Good product images ──> FastAPI /fit ──> feature memory bank + calibration
+                                                   │
+Webcam / image / video ──> React ──> /inspect ────┤
+                                                   ├──> score + heatmap + verdict
+                                                   └──> SQLite history and analytics
+                                                            │
+React dashboard <── /stats, /history, /alerts, analytics ───┘
+React Ask the Log ──> /chat ──> OpenRouter (optional; grounded in local log data)
+```
+
+The default backbone is torchvision `wide_resnet50_2`; set `BACKBONE = "resnet18"` in `backend/config.py` for a smaller CPU model. The app limits fitting to 30 sorted good images by default. Nearest-neighbor queries use chunked `torch.cdist`; the project does not use anomalib or FAISS. ORB alignment is disabled by default and can be enabled for a fixed camera/reference rig through `ALIGN_ENABLED` in `backend/config.py`.
+
+## Dataset / API Information
+
+### MVTec AD
+
+Download MVTec AD from the [official dataset page](https://www.mvtec.com/company/research/datasets/mvtec-ad) and extract the `bottle` category in this layout:
 
 ```text
 data/mvtec/bottle/train/good/*.png
@@ -59,59 +114,79 @@ data/mvtec/bottle/test/good/*.png
 data/mvtec/bottle/test/<defect-type>/*.png
 ```
 
-The default category is `bottle`; change `CATEGORY` in `backend/config.py` to select another category. The app uses up to the first 30 sorted images in `train/good` for fitting and calibration.
+The default category is `bottle`; change `CATEGORY` in `backend/config.py` to select another category. Dataset fitting uses up to the first 30 sorted images in `train/good` for model fitting and calibration. Alternatively, upload at least two good images through the UI.
 
-## Run
+### Backend API
 
-In one PowerShell terminal from the repository root:
+The FastAPI service defaults to `http://localhost:8000`. Interactive endpoint documentation is available at `http://localhost:8000/docs` while it is running.
 
-```powershell
-.\.venv\Scripts\Activate.ps1
-python -m uvicorn backend.main:app --reload --host 127.0.0.1 --port 8000
-```
+| Endpoint | Purpose |
+| --- | --- |
+| `POST /fit` | Fit from the configured dataset or uploaded good images |
+| `POST /inspect` | Inspect an uploaded frame |
+| `GET/POST /threshold` | Read or update the inspection threshold |
+| `GET /threshold/suggestion` | Suggest a threshold based on calibration |
+| `GET /health`, `GET /model_info` | Check service and model status |
+| `GET /stats`, `GET /history`, `GET /alerts` | Read inspection metrics, records, and alerts |
+| `GET /cumulative_heatmap`, `GET /driftguard/status` | Read repeat-defect and drift analytics |
+| `POST /feedback/{inspection_id}` | Record feedback for an inspection |
+| `POST /chat` | Ask a question about logged inspection data (OpenRouter key required) |
 
-In another terminal:
+Other settings and demo endpoints are documented by FastAPI at `/docs`. SQLite is stored at `data/visionqc.db`; runtime model and frame data are also kept under `data/`.
 
-```powershell
-cd frontend
-npm run dev
-```
-
-Open `http://localhost:5173`. Choose **Fit from dataset** or upload at least two good photos before inspecting. Browser camera access requires localhost permission. Video files are read in-browser and submitted frame-by-frame. Data is stored under `data/`; the model is not refit on startup.
-
-To enable the data-only chat, set `OPENROUTER_API_KEY` in the root `.env` file. Questions are answered using only inspection data from SQLite.
-
-## Evaluate
-
-With MVTec AD at the documented path:
+To run the evaluation script with the dataset installed:
 
 ```powershell
 .\.venv\Scripts\Activate.ps1
 python scripts\evaluate.py --category bottle
 ```
 
-The script fits on up to 30 good training photos and evaluates every test image, printing AUROC, detection rate at the calibration-derived threshold, and false alarm rate. Evaluation writes the same local memory bank as the app.
+It reports AUROC, detection rate at the calibration-derived threshold, and false alarm rate.
 
-To fit directly from a good-only video and immediately replay it through the live inspection endpoint:
+To fit from a known-good video and replay it through the inspection API:
 
 ```powershell
 .\.venv\Scripts\python.exe scripts\fit_from_video.py path\to\good_clip.mp4 --frames 30
 ```
 
-The utility samples evenly spaced frames, encodes them as JPEG at the browser capture quality, posts them to `/fit`, then replays the same clip through `/inspect` at three frames per second. It prints capture thresholds and the recapture/pass/fail percentages. Use a clip containing only known-good product frames for fitting.
+Use a clip containing only known-good product frames for fitting. The tool samples frames, fits the model, then replays the clip and prints capture thresholds and verdict percentages.
 
-## Seed dashboard data
+Optional synthetic dashboard data can be added with:
 
 ```powershell
 .\.venv\Scripts\Activate.ps1
 python scripts\seed_demo_data.py
 ```
 
-This inserts 60 synthetic inspections with `source='seed'`, timestamps spread across the previous day, and a repeated FAIL cluster. Run it against a fresh/empty database for a clean demo; the script appends rows each time.
+This appends 60 synthetic inspections to the local database each time it runs. Use a fresh or empty database for a clean demo.
 
-## Implementation notes
+## Screenshots / Demo Information
 
-- Backbone defaults to torchvision `wide_resnet50_2`; set `BACKBONE = "resnet18"` in `backend/config.py` for a smaller CPU model.
-- No anomalib or FAISS is used. Nearest-neighbor queries use chunked `torch.cdist`.
-- ORB alignment is off by default because the included MVTec demo frames are already framed and provide too few stable ORB matches. Set `ALIGN_ENABLED = True` in `backend/config.py` for a fixed camera/reference rig, then restart the backend.
-- The default UI/API pair uses `localhost:5173` and `localhost:8000`.
+Run the frontend and backend using the instructions above to explore the landing page, inspection workspace, dashboard, history, alerts, analytics, and Ask the Log interface. The repository does not currently include a maintained screenshot gallery or hosted demo URL. Browser login is demo-only: any valid email and non-empty password opens the local demo workspace; replace it with real authentication before production use.
+
+## Limitations & Future Scope
+
+### Current limitations
+
+- This is a local demonstration, not a production quality-control system.
+- Model performance depends on representative good reference images, stable framing, lighting, and camera conditions.
+- The default fitting path uses the `bottle` dataset category; other products may need configuration and their own calibration data.
+- CPU inference is supported, but throughput depends on the machine and model backbone.
+- ORB alignment is disabled by default and requires a suitable fixed camera/reference setup.
+- Authentication is demo-only, and the optional chat requires a network connection and an OpenRouter API key.
+- Evaluation metrics from MVTec AD or a demo dataset do not guarantee performance on a factory production line.
+
+### Future scope
+
+- Add production authentication, access control, and deployment configuration.
+- Support configurable product categories, camera profiles, and multi-line workspaces.
+- Improve calibration and evaluation workflows with customer-specific datasets and repeatable reports.
+- Add deployment monitoring, model versioning, and operational data export.
+- Expand the demo documentation with current screenshots and a recorded walkthrough.
+
+## Team Members
+
+- Shravani Chaudhari
+- Mitanshi Khanna
+- Shirley Castelino
+- Shravani Kolekar
