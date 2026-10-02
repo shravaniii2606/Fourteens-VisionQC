@@ -1,270 +1,102 @@
-import { useEffect, useRef, useState } from 'react';
-import {
-  CartesianGrid, Line, LineChart, ReferenceLine, ResponsiveContainer,
-  Tooltip, XAxis, YAxis, BarChart, Bar,
-} from 'recharts';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { BrowserRouter, Link, Navigate, NavLink, Route, Routes, useLocation, useNavigate } from 'react-router-dom';
+import { motion, useScroll, useTransform } from 'framer-motion';
+import { Activity, AlertCircle, AlertTriangle, AlignCenter, ArrowDownRight, ArrowRight, ArrowUpRight, BarChart3, Bell, Check, CheckCircle2, ChevronDown, CircleHelp, Clock3, CloudUpload, Cog, Database, Eye, EyeOff, FileClock, Gauge, Grid2X2, House, Image, Info, Layers3, LogOut, MessageSquareText, Play, Plus, ScanLine, Search, Send, Settings, Shield, ShieldCheck, SlidersHorizontal, Sparkles, StopCircle, Upload, Video, X } from 'lucide-react';
+import { CartesianGrid, Cell, Line, LineChart, Pie, PieChart, ReferenceLine, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
+import { api, json } from './api.js';
+import { results as evaluation } from './results.js';
 
-const API = 'http://localhost:8000';
+const NAV = [
+  ['Home', '/app/home', House], ['Teach', '/app/teach', Database], ['Inspect', '/app/inspect', ScanLine],
+  ['Threshold', '/app/threshold', SlidersHorizontal], ['Capture Checks', '/app/capture-checks', Image],
+  ['False Alarm', '/app/false-alarm', Shield], ['Repeat Defect', '/app/repeat-defect', Grid2X2],
+  ['DriftGuard', '/app/driftguard', Activity], ['Dashboard', '/app/dashboard', BarChart3],
+  ['Ask the Log', '/app/ask-the-log', MessageSquareText], ['History', '/app/history', FileClock],
+  ['Alerts', '/app/alerts', Bell], ['Settings', '/app/settings', Settings],
+];
+const titleMap = Object.fromEntries(NAV.map(([label, path]) => [path, label]));
+const fmt = (value, digits = 1) => Number.isFinite(Number(value)) ? Number(value).toFixed(digits) : '—';
+const pct = (value) => `${fmt(Number(value) * 100)}%`;
 
-async function request(path, options) {
-  const response = await fetch(`${API}${path}`, options);
-  const body = await response.json().catch(() => ({}));
-  if (!response.ok) throw new Error(body.detail || 'Request failed');
-  return body;
+function Brand({ small = false }) { return <Link className={`brand ${small ? 'brand-small' : ''}`} to="/"><span>Vision</span><b>QC</b></Link>; }
+function Card({ children, className = '', ...props }) { return <section className={`card ${className}`} {...props}>{children}</section>; }
+function SectionTitle({ eyebrow, title, description, action }) { return <div className="section-title"><div>{eyebrow && <span className="eyebrow">{eyebrow}</span>}<h2>{title}</h2>{description && <p>{description}</p>}</div>{action}</div>; }
+function Button({ children, variant = 'primary', className = '', ...props }) { return <button className={`button ${variant} ${className}`} {...props}>{children}</button>; }
+function VerdictBadge({ verdict = 'PASS', reason }) { const key = String(verdict).toLowerCase(); const Icon = key === 'pass' ? CheckCircle2 : key === 'fail' ? X : AlertTriangle; return <div className={`verdict-badge ${key}`}><Icon size={17}/><span>{verdict}</span>{reason && <small>{reason}</small>}</div>; }
+function StatCard({ label, value, note, trend, icon: Icon = Activity }) { return <Card className="stat-card"><div className="stat-head"><span>{label}</span><Icon size={17}/></div><strong>{value}</strong><div className="stat-foot">{trend && <span className={trend.startsWith('+') ? 'trend-up' : 'trend-down'}>{trend.startsWith('+') ? <ArrowUpRight size={14}/> : <ArrowDownRight size={14}/>} {trend}</span>}<span>{note}</span></div></Card>; }
+function Spinner() { return <span className="spinner" aria-label="Loading"/>; }
+function EmptyState({ title = 'Fit the model first', detail = 'Teach VisionQC what a good unit looks like to start inspection.', action }) { return <div className="empty-state"><span className="empty-icon"><Layers3 size={23}/></span><strong>{title}</strong><p>{detail}</p>{action}</div>; }
+function Toast({ message, onClose }) { useEffect(() => { if (!message) return; const id = setTimeout(onClose, 5200); return () => clearTimeout(id); }, [message, onClose]); return message ? <div className="toast" role="status"><AlertCircle size={17}/><span>{message}</span><button onClick={onClose} aria-label="Dismiss"><X size={16}/></button></div> : null; }
+
+function Landing() {
+  const { scrollYProgress } = useScroll();
+  const healing = useTransform(scrollYProgress, [0.24, 0.43], [1, 0]);
+  const crackOpacity = useTransform(healing, [0, 0.15, 1], [0, 0.28, 1]);
+  const crackDash = useTransform(healing, (v) => 1 - v);
+  return <div className="landing">
+    <header className="public-nav"><Brand/><nav><a href="#product">Product</a><a href="#solutions">Solutions</a><a href="#numbers">Pricing</a><a href="#resources">Resources</a></nav><Link className="button outline nav-login" to="/login">Login</Link></header>
+    <section className="hero" id="product"><div className="hero-orb orb-one"/><div className="hero-orb orb-two"/><div className="product-float float-bottle"><Bottle className="bottle-mini"/><span>Surface inspection<br/><small>No defects detected</small></span></div><div className="product-float float-cup"><span className="cup-shape"/>Material check<br/><small>Stainless steel · OK</small></div><div className="product-float float-tin"><span className="tin-shape"/>Edge inspection<br/><small>Within tolerance</small></div><div className="hero-content"><div className="hero-kicker"><span className="live-dot"/> INTELLIGENT QUALITY CONTROL</div><h1>Vision<span>QC</span></h1><p className="hero-tagline">AI DEFECT INSPECTION FOR SMALL FACTORIES</p><p className="hero-subline">Better Quality. Less Waste.</p><div className="hero-actions"><Link className="button primary" to="/login">START INSPECTION <ArrowRight size={16}/></Link><a className="button outline" href="#how-it-works">SEE HOW IT WORKS <Play size={14}/></a></div><div className="hero-proof"><ShieldCheck size={15}/> Secure <i/> Reliable <i/> Built for industry</div></div><div className="hero-product-note">Precision vision for every production line</div></section>
+    <section className="heal-section" id="how-it-works"><div className="heal-copy"><span className="eyebrow">A defect you can watch disappear</span><h2>Crack-healing scrollbar</h2><p>See defects disappear as you scroll. VisionQC learns the difference between a harmless mark and a real quality issue.</p><div className="stage-list"><span>01 <b>Detect</b><small>Surface crack found</small></span><span>02 <b>Analyze</b><small>Compare to normal units</small></span><span>03 <b>Decide</b><small>Clear, confident results</small></span></div></div><div className="heal-visual"><div className="heal-bottle-wrap"><Bottle className="hero-bottle"/><motion.svg className="crack-overlay" viewBox="0 0 200 400" aria-hidden="true"><motion.path d="M115 174l-16 20 19 14-20 23 16 18-15 22" pathLength={1} fill="none" stroke="#e5484d" strokeWidth="3" strokeLinecap="round" style={{ opacity: crackOpacity, strokeDasharray: 1, strokeDashoffset: crackDash }}/></motion.svg><motion.div className="magnifier" style={{ opacity: useTransform(healing, [0,1], [1,.3]) }}><span/></motion.div></div><div className="heal-stages"><span>0% (cracked)</span><ArrowRight/><span>25%</span><ArrowRight/><span>50%</span><ArrowRight/><span>100% (clean)</span></div><div className="scroll-marker"><span className="scroll-line"/><span className="scroll-knob"/><small>Scroll to heal</small></div></div></section>
+    <section className="how-section" id="solutions"><SectionTitle eyebrow="Simple by design" title="Quality control, made practical" description="A reliable inspection workflow your team can learn in minutes."/><div className="step-grid">{[[Database,'01','Teach','Show VisionQC 25 good product photos. It learns what normal looks like.'],[ScanLine,'02','Inspect','Use a live camera or recorded video to check each unit.'],[CheckCircle2,'03','Decide','Get an anomaly heatmap, confidence score and clear verdict.']].map(([Icon,num,title,copy])=><Card className="step-card" key={num}><div className="step-icon"><Icon/></div><span className="step-number">{num}</span><h3>{title}</h3><p>{copy}</p></Card>)}</div></section>
+    <section className="feature-section" id="resources"><SectionTitle eyebrow="Built for real factories" title="Everything your line needs" description="Practical quality tools, from the first good sample to the next shift."/><div className="feature-grid">{[['Heatmap','See exactly where an anomaly appears.'],['Auto threshold','Tune sensitivity using your calibration range.'],['Capture checks','Catch dark, blurry or shifted frames early.'],['Auto-align','Keep product framing consistent between units.'],['Repeat defect alert','Find recurring faults before they spread.'],['False alarm learning','Teach the model from supervisor feedback.'],['DriftGuard','Know when your camera or process changes.'],['Ask the Log','Get answers from your inspection history.']].map(([t,d])=><Card className="feature-card" key={t}><CheckCircle2 size={18}/><div><h3>{t}</h3><p>{d}</p></div></Card>)}</div></section>
+    <section className="numbers-section" id="numbers"><SectionTitle eyebrow="Measured performance" title="Quality you can quantify"/><div className="numbers-grid">{[['AUROC',evaluation.auroc],['Detection rate',evaluation.detectionRate],['False alarm rate',evaluation.falseAlarmRate]].map(([a,b])=><Card key={a}><span>{a}</span><strong>{b}</strong></Card>)}</div></section><footer className="public-footer"><Brand/><span>Secure <i/> Reliable <i/> Built for Industry</span><small>© 2026 VisionQC</small></footer>
+  </div>;
 }
 
-function App() {
-  const [health, setHealth] = useState(null);
-  const [fitResult, setFitResult] = useState(null);
-  const [threshold, setThreshold] = useState(1);
-  const [thresholdBounds, setThresholdBounds] = useState({ min: 0, max: 2 });
-  const [source, setSource] = useState('webcam');
-  const [running, setRunning] = useState(false);
-  const [result, setResult] = useState(null);
-  const [rawFrame, setRawFrame] = useState(null);
-  const [stats, setStats] = useState(null);
-  const [history, setHistory] = useState([]);
-  const [alerts, setAlerts] = useState([]);
-  const [heatGrid, setHeatGrid] = useState([]);
-  const [question, setQuestion] = useState('');
-  const [chatItems, setChatItems] = useState([]);
-  const [error, setError] = useState('');
-  const [busy, setBusy] = useState(false);
-  const [videoUrl, setVideoUrl] = useState('');
-  const videoRef = useRef(null);
-  const canvasRef = useRef(null);
-  const streamRef = useRef(null);
-  const runningRef = useRef(false);
-  const pendingRef = useRef(false);
-  const timerRef = useRef(null);
-  const thresholdRef = useRef(threshold);
+function Bottle({ className = '' }) { return <svg className={className} viewBox="0 0 200 400" fill="none" role="img" aria-label="Stainless steel bottle"><defs><linearGradient id="steel" x1="0" y1="0" x2="1" y2="0"><stop stopColor="#7a858a"/><stop offset=".17" stopColor="#f9fbfc"/><stop offset=".38" stopColor="#aeb9be"/><stop offset=".66" stopColor="#fff"/><stop offset=".88" stopColor="#89979e"/><stop offset="1" stopColor="#e7ecee"/></linearGradient><linearGradient id="cap" x1="0" y1="0" x2="1" y2="0"><stop stopColor="#77848b"/><stop offset=".5" stopColor="#f3f6f7"/><stop offset="1" stopColor="#89969c"/></linearGradient></defs><ellipse cx="100" cy="374" rx="53" ry="10" fill="#203b59" opacity=".12"/><rect x="77" y="24" width="46" height="39" rx="9" fill="url(#cap)" stroke="#75838a"/><path d="M82 26v-9q0-5 5-5h26q5 0 5 5v9" fill="url(#cap)" stroke="#75838a"/><rect x="69" y="57" width="62" height="27" rx="11" fill="url(#steel)" stroke="#9ca8ad"/><path d="M68 79Q53 88 52 110L45 336Q44 366 71 371h58q27-5 26-35l-7-226q-1-22-16-31" fill="url(#steel)" stroke="#89969d" strokeWidth="2"/><path d="M64 103l-7 228q-1 22 13 28" stroke="#fff" strokeWidth="5" opacity=".72"/><path d="M137 105l7 225q1 19-13 28" stroke="#64747b" strokeWidth="3" opacity=".32"/><path d="M55 342q45 17 90 0" stroke="#67777f" opacity=".48"/></svg>; }
 
-  useEffect(() => { thresholdRef.current = threshold; }, [threshold]);
-
-  useEffect(() => {
-    const refresh = async () => {
-      try {
-        const [healthData, statsData, historyData, alertData, gridData, thresholdData] = await Promise.all([
-          request('/health'), request('/stats'), request('/history?limit=20'),
-          request('/alerts'), request('/cumulative_heatmap'), request('/threshold'),
-        ]);
-        setHealth(healthData);
-        setStats(statsData);
-        setHistory(historyData);
-        setAlerts(alertData);
-        setHeatGrid(gridData.grid);
-        setThreshold(thresholdData.threshold);
-        setThresholdBounds({ min: thresholdData.min, max: Math.max(thresholdData.max, thresholdData.threshold * 1.1, 0.01) });
-      } catch (e) { setError(e.message); }
-    };
-    refresh();
-    const id = setInterval(refresh, 3000);
-    return () => clearInterval(id);
-  }, []);
-
-  useEffect(() => () => {
-    runningRef.current = false;
-    if (timerRef.current) clearTimeout(timerRef.current);
-    streamRef.current?.getTracks().forEach((track) => track.stop());
-    if (videoUrl) URL.revokeObjectURL(videoUrl);
-  }, [videoUrl]);
-
-  async function fitFromDataset() {
-    setBusy(true); setError('');
-    try {
-      const response = await request('/fit', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ use_dataset: true }) });
-      applyCalibration(response);
-    } catch (e) { setError(e.message); }
-    finally { setBusy(false); }
+function Login() {
+  const [email, setEmail] = useState(''); const [password, setPassword] = useState(''); const [show, setShow] = useState(false); const [errors, setErrors] = useState({}); const navigate = useNavigate();
+  function submit(event) { event.preventDefault(); const next = {}; if (!/^\S+@\S+\.\S+$/.test(email)) next.email = 'Enter a valid email address.'; if (!password) next.password = 'Enter your password.'; setErrors(next); if (Object.keys(next).length) return;
+    // DEMO AUTH ONLY: replace this local token flow with real authentication before production.
+    localStorage.setItem('visionqc_token', 'demo-session'); localStorage.setItem('visionqc_user', email); navigate('/app/inspect', { replace: true });
   }
-
-  async function fitUploads(event) {
-    const files = [...event.target.files];
-    if (!files.length) return;
-    setBusy(true); setError('');
-    const form = new FormData();
-    files.forEach((file) => form.append('files', file));
-    try { applyCalibration(await request('/fit', { method: 'POST', body: form })); }
-    catch (e) { setError(e.message); }
-    finally { setBusy(false); event.target.value = ''; }
-  }
-
-  function applyCalibration(value) {
-    setFitResult(value);
-    setThreshold(value.threshold);
-    setThresholdBounds({ min: value.calibration.min, max: Math.max(value.calibration.max * 1.25, value.threshold * 1.1, 0.01) });
-  }
-
-  async function chooseSource(next) {
-    stopInspecting();
-    setSource(next);
-    if (next === 'webcam') {
-      try {
-        const stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: false });
-        streamRef.current = stream;
-        if (videoRef.current) { videoRef.current.srcObject = stream; await videoRef.current.play(); }
-      } catch (e) { setError(`Camera unavailable: ${e.message}`); }
-    } else {
-      streamRef.current?.getTracks().forEach((track) => track.stop());
-      streamRef.current = null;
-    }
-  }
-
-  function chooseVideo(event) {
-    const file = event.target.files[0];
-    if (!file) return;
-    if (videoUrl) URL.revokeObjectURL(videoUrl);
-    setVideoUrl(URL.createObjectURL(file));
-  }
-
-  function stopInspecting() {
-    runningRef.current = false;
-    setRunning(false);
-    if (timerRef.current) clearTimeout(timerRef.current);
-    timerRef.current = null;
-  }
-
-  async function sendFrame() {
-    if (!runningRef.current || pendingRef.current) return scheduleNext();
-    const video = videoRef.current;
-    const canvas = canvasRef.current;
-    if (!video || !canvas || !video.videoWidth || !video.videoHeight) return scheduleNext();
-    canvas.width = video.videoWidth;
-    canvas.height = video.videoHeight;
-    canvas.getContext('2d').drawImage(video, 0, 0, canvas.width, canvas.height);
-    const dataUrl = canvas.toDataURL('image/jpeg', 0.85);
-    setRawFrame(dataUrl);
-    const blob = await (await fetch(dataUrl)).blob();
-    const form = new FormData();
-    form.append('frame', blob, 'frame.jpg');
-    form.append('source', source);
-    pendingRef.current = true;
-    try { setResult(await request('/inspect', { method: 'POST', body: form })); setError(''); }
-    catch (e) { setError(e.message); stopInspecting(); }
-    finally { pendingRef.current = false; }
-    scheduleNext();
-  }
-
-  function scheduleNext() {
-    if (runningRef.current) timerRef.current = setTimeout(sendFrame, 333);
-  }
-
-  async function toggleInspecting() {
-    if (runningRef.current) return stopInspecting();
-    if (source === 'webcam' && !streamRef.current) {
-      try {
-        const stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: false });
-        streamRef.current = stream;
-        if (videoRef.current) { videoRef.current.srcObject = stream; await videoRef.current.play(); }
-      } catch (e) { setError(`Camera unavailable: ${e.message}`); return; }
-    }
-    if (source === 'video' && videoRef.current?.paused) {
-      try { await videoRef.current.play(); }
-      catch (e) { setError(`Video could not start: ${e.message}`); return; }
-    }
-    runningRef.current = true;
-    setRunning(true);
-    sendFrame();
-  }
-
-  async function saveThreshold() {
-    try { await request('/threshold', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ threshold: Number(thresholdRef.current) }) }); }
-    catch (e) { setError(e.message); }
-  }
-
-  async function confirmFalseAlarm() {
-    if (!result?.id || !window.confirm('Confirm this FAIL was a false alarm? Its frame will be added to the normal memory bank.')) return;
-    try {
-      const response = await request(`/feedback/${result.id}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ confirm: true }) });
-      setError(`False alarm recorded. Memory bank now has ${response.bank_size} patches.`);
-    } catch (e) { setError(e.message); }
-  }
-
-  async function askQuestion(event) {
-    event.preventDefault();
-    if (!question.trim()) return;
-    const asked = question.trim();
-    setQuestion('');
-    setChatItems((items) => [...items, { question: asked, answer: 'Thinking...' }]);
-    try {
-      const response = await request('/chat', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ question: asked }) });
-      setChatItems((items) => items.map((item, index) => index === items.length - 1 ? { ...item, answer: response.answer } : item));
-    } catch (e) { setError(e.message); }
-  }
-
-  const chartData = (stats?.score_trend || []).map((point) => ({ ...point, shortTime: new Date(point.ts).toLocaleTimeString() }));
-  const displayImage = result?.heatmap_png_base64 ? `data:image/png;base64,${result.heatmap_png_base64}` : rawFrame;
-  const verdictClass = result?.verdict?.toLowerCase() || '';
-
-  return (
-    <main>
-      <h1>VisionQC</h1>
-      <p>Local visual defect inspection</p>
-      {error && <p role="alert">{error}</p>}
-      <p>Backend: {health?.fitted ? 'Model fitted' : health?.model_loaded ? 'Model loaded, fit required' : 'Not fitted'}{health?.model_error ? ` (${health.model_error})` : ''}</p>
-
-      <section>
-        <h2>Setup</h2>
-        <button disabled={busy} onClick={fitFromDataset}>Fit from dataset</button>{' '}
-        <label>Upload good photos <input type="file" accept="image/*" multiple onChange={fitUploads} /></label>
-        {fitResult && <p>Fit {fitResult.fit.images} images; {fitResult.fit.patches} patches. Calibration mean {fitResult.calibration.mean.toFixed(4)}, std {fitResult.calibration.std.toFixed(4)}. Suggested threshold {fitResult.suggested_threshold.toFixed(4)}.</p>}
-      </section>
-
-      <section>
-        <h2>Source</h2>
-        <label><input type="radio" name="source" checked={source === 'webcam'} onChange={() => chooseSource('webcam')} /> Webcam</label>{' '}
-        <label><input type="radio" name="source" checked={source === 'video'} onChange={() => chooseSource('video')} /> Video file</label>{' '}
-        {source === 'video' && <input type="file" accept="video/*" onChange={chooseVideo} />}
-        <div><video ref={videoRef} src={source === 'video' ? videoUrl : undefined} muted playsInline controls={source === 'video'} /></div>
-        <button onClick={toggleInspecting}>{running ? 'Stop inspecting' : 'Start inspecting'}</button>
-        <canvas ref={canvasRef} hidden />
-      </section>
-
-      <section>
-        <h2>Result</h2>
-        {result && <>
-          <strong className={`verdict ${verdictClass}`}>{result.verdict}</strong>
-          <p>Confidence: {result.confidence_pct.toFixed(1)}% | Score: {result.score.toFixed(4)}</p>
-          <p>{result.reason}</p>
-          {displayImage && <img className="result-image" src={displayImage} alt={result.heatmap_png_base64 ? 'Anomaly heatmap overlay' : 'Most recent camera frame'} />}
-          {result.verdict === 'FAIL' && <button onClick={confirmFalseAlarm}>False alarm</button>}
-        </>}
-      </section>
-
-      <section>
-        <h2>Threshold</h2>
-        <label>Current: {Number(threshold).toFixed(4)}{' '}
-          <input type="range" min={thresholdBounds.min} max={thresholdBounds.max} step={Math.max((thresholdBounds.max - thresholdBounds.min) / 500, 0.0001)} value={Math.min(threshold, thresholdBounds.max)} onChange={(event) => setThreshold(Number(event.target.value))} onPointerUp={saveThreshold} onKeyUp={saveThreshold} />
-        </label>
-      </section>
-
-      <section>
-        <h2>Dashboard</h2>
-        {stats && <p>Today rejection rate: {(stats.rejection_rate_today * 100).toFixed(1)}% | Pass: {stats.pass} | Fail: {stats.fail} | Recapture: {stats.recapture} | Recapture rate: {(stats.recapture_rate * 100).toFixed(1)}%</p>}
-        {stats?.drift?.warn && <p role="alert">Score drift is above calibration baseline.</p>}
-        <div className="chart"><ResponsiveContainer width="100%" height={260}><LineChart data={chartData}><CartesianGrid strokeDasharray="3 3" /><XAxis dataKey="shortTime" /><YAxis /><Tooltip /><ReferenceLine y={threshold} stroke="red" label="Threshold" /><Line type="monotone" dataKey="score" stroke="#225c35" dot={false} /></LineChart></ResponsiveContainer></div>
-        <h3>Recapture reasons</h3>
-        <div className="chart"><ResponsiveContainer width="100%" height={200}><BarChart data={stats?.recapture_reasons || []}><CartesianGrid strokeDasharray="3 3" /><XAxis dataKey="reason" /><YAxis allowDecimals={false} /><Tooltip /><Bar dataKey="count" fill="#c9871a" /></BarChart></ResponsiveContainer></div>
-      </section>
-
-      <section>
-        <h2>Repeat defect</h2>
-        {alerts.map((alert) => <p className="alert" key={alert.id}>{alert.message}</p>)}
-        <table className="grid"><tbody>{heatGrid.map((row, y) => <tr key={y}>{row.map((count, x) => <td key={x} title={`${count} fails`} style={{ backgroundColor: count ? `rgba(210, 35, 35, ${Math.min(0.2 + count * 0.15, 0.9)})` : '#f2f2f2' }}>{count || ''}</td>)}</tr>)}</tbody></table>
-      </section>
-
-      <section>
-        <h2>Chat</h2>
-        <form onSubmit={askQuestion}><input value={question} onChange={(event) => setQuestion(event.target.value)} placeholder="Ask about inspection data" /><button type="submit">Send</button></form>
-        {chatItems.map((item, index) => <div key={index}><p><b>Q:</b> {item.question}</p><p><b>A:</b> {item.answer}</p></div>)}
-      </section>
-
-      <section>
-        <h2>History</h2>
-        <table><thead><tr><th>Time</th><th>Verdict</th><th>Score</th><th>Reason</th></tr></thead><tbody>{history.map((row) => <tr key={row.id}><td>{new Date(row.ts).toLocaleString()}</td><td>{row.verdict}</td><td>{Number(row.score).toFixed(4)}</td><td>{row.reason}</td></tr>)}</tbody></table>
-      </section>
-    </main>
-  );
+  return <div className="login-page"><div className="login-art"><div className="art-glow"/><div className="art-copy"><span className="eyebrow">VISIONQC QUALITY SYSTEM</span><h1>Confidence on<br/>every production line.</h1><p>Make better inspection decisions with a vision system built for the people who run your factory.</p></div><div className="login-bottle"><Bottle className="art-bottle"/><div className="art-lens"><span className="crack-mark"/></div><span className="defect-tag"><span/> Defect detected</span></div><div className="art-footer">01 / PRECISION INSPECTION</div></div><div className="login-panel"><div className="login-wrap"><Card className="login-card"><Brand/><h2>Sign in to your account</h2><p className="muted">Welcome back. Enter your details to continue.</p><form onSubmit={submit} noValidate><label>Email address<input autoComplete="username" type="email" value={email} onChange={e=>setEmail(e.target.value)} placeholder="you@company.com" aria-invalid={!!errors.email}/></label>{errors.email&&<small className="field-error">{errors.email}</small>}<label>Password<div className="password-wrap"><input autoComplete="current-password" type={show?'text':'password'} value={password} onChange={e=>setPassword(e.target.value)} placeholder="Enter your password" aria-invalid={!!errors.password}/><button type="button" aria-label={show?'Hide password':'Show password'} onClick={()=>setShow(!show)}>{show?<EyeOff size={16}/>:<Eye size={16}/>}</button></div></label>{errors.password&&<small className="field-error">{errors.password}</small>}<div className="form-row"><label className="check-label"><input type="checkbox"/> Remember me</label><button className="text-button" type="button">Forgot password?</button></div><Button className="full-width" type="submit">Log in</Button></form><div className="login-assurance"><span><ShieldCheck size={15}/> Secure sign in</span><span>Encrypted workspace</span></div></Card><p className="demo-note">Demo mode: use <b>demo@visionqc.com</b> / <b>demo123</b></p><Link className="back-link" to="/">← Back to VisionQC</Link></div></div></div>;
 }
 
-export default App;
+function Guard({ children }) { return localStorage.getItem('visionqc_token') ? children : <Navigate to="/login" replace/>; }
+
+function Shell() {
+  const location = useLocation(); const navigate = useNavigate();
+  const [health,setHealth]=useState(null);const [stats,setStats]=useState(null);const [history,setHistory]=useState([]);const [alerts,setAlerts]=useState([]);const [heatGrid,setHeatGrid]=useState([]);const [threshold,setThreshold]=useState(0.185);const [bounds,setBounds]=useState({min:0,max:.5});const [result,setResult]=useState(null);const [rawFrame,setRawFrame]=useState(null);const [fitResult,setFitResult]=useState(null);const [error,setError]=useState('');const [busy,setBusy]=useState(false);const [source,setSource]=useState('webcam');const [running,setRunning]=useState(false);const [videoUrl,setVideoUrl]=useState('');const [question,setQuestion]=useState('');const [chatItems,setChatItems]=useState([]);const [selected,setSelected]=useState(null);const [filter,setFilter]=useState('All');
+  const videoRef=useRef(null),canvasRef=useRef(null),streamRef=useRef(null),runningRef=useRef(false),pendingRef=useRef(false),timerRef=useRef(null),thresholdRef=useRef(threshold);
+  useEffect(()=>{thresholdRef.current=threshold},[threshold]);
+  const closeToast=useCallback(()=>setError(''),[]);
+  useEffect(()=>{let alive=true;const refresh=async()=>{if(document.hidden)return;try{const [h,s,rows,a,g,t]=await Promise.all([api('/health'),api('/stats'),api('/history?limit=100'),api('/alerts'),api('/cumulative_heatmap'),api('/threshold')]);if(!alive)return;setHealth(h);setStats(s);setHistory(rows);setAlerts(a);setHeatGrid(g.grid||[]);setThreshold(t.threshold);setBounds({min:t.min,max:Math.max(t.max,t.threshold*1.1,.01)});}catch(e){if(alive)setError(e.message)}};refresh();const id=setInterval(refresh,3000);return()=>{alive=false;clearInterval(id)}},[]);
+  useEffect(()=>()=>{runningRef.current=false;if(timerRef.current)clearTimeout(timerRef.current);streamRef.current?.getTracks().forEach(t=>t.stop());if(videoUrl)URL.revokeObjectURL(videoUrl)},[videoUrl]);
+  function stopInspecting(){runningRef.current=false;setRunning(false);if(timerRef.current)clearTimeout(timerRef.current);timerRef.current=null;}
+  async function chooseSource(next){stopInspecting();setSource(next);if(next==='webcam'){try{const stream=await navigator.mediaDevices.getUserMedia({video:true,audio:false});streamRef.current=stream;if(videoRef.current){videoRef.current.srcObject=stream;await videoRef.current.play()}}catch(e){setError(`Camera unavailable: ${e.message}`)}}else{streamRef.current?.getTracks().forEach(t=>t.stop());streamRef.current=null}}
+  function scheduleNext(){if(runningRef.current)timerRef.current=setTimeout(sendFrame,333)}
+  async function sendFrame(){if(!runningRef.current||pendingRef.current)return scheduleNext();const video=videoRef.current,canvas=canvasRef.current;if(!video||!canvas||!video.videoWidth||!video.videoHeight)return scheduleNext();canvas.width=video.videoWidth;canvas.height=video.videoHeight;canvas.getContext('2d').drawImage(video,0,0,canvas.width,canvas.height);const data=canvas.toDataURL('image/jpeg',.85);setRawFrame(data);const blob=await(await fetch(data)).blob();const form=new FormData();form.append('frame',blob,'frame.jpg');form.append('source',source);pendingRef.current=true;try{setResult(await api('/inspect',{method:'POST',body:form}));setError('')}catch(e){setError(e.message);stopInspecting()}finally{pendingRef.current=false}scheduleNext()}
+  async function toggleInspecting(){if(runningRef.current)return stopInspecting();if(source==='webcam'&&!streamRef.current){try{const stream=await navigator.mediaDevices.getUserMedia({video:true,audio:false});streamRef.current=stream;if(videoRef.current){videoRef.current.srcObject=stream;await videoRef.current.play()}}catch(e){setError(`Camera unavailable: ${e.message}`);return}}if(source==='video'&&videoRef.current?.paused){try{await videoRef.current.play()}catch(e){setError(`Video could not start: ${e.message}`);return}}runningRef.current=true;setRunning(true);sendFrame()}
+  async function fitDataset(){setBusy(true);try{const v=await api('/fit',{method:'POST',...json('POST',{use_dataset:true})});applyFit(v)}catch(e){setError(e.message)}finally{setBusy(false)}}
+  async function fitUploads(event){const files=[...event.target.files];if(!files.length)return;setBusy(true);const form=new FormData();files.forEach(f=>form.append('files',f));try{applyFit(await api('/fit',{method:'POST',body:form}))}catch(e){setError(e.message)}finally{setBusy(false);event.target.value=''}}
+  function applyFit(v){setFitResult(v);setThreshold(v.threshold);setBounds({min:v.calibration.min,max:Math.max(v.calibration.max*1.25,v.threshold*1.1,.01)})}
+  async function saveThreshold(){try{await api('/threshold',json('POST',{threshold:Number(thresholdRef.current)}))}catch(e){setError(e.message)}}
+  async function confirmFalseAlarm(id=result?.id){if(!id||!window.confirm('Confirm this FAIL was a false alarm? Its frame will be added to the normal memory bank.'))return;try{const v=await api(`/feedback/${id}`,json('POST',{confirm:true}));setError(`False alarm recorded. Memory bank now has ${v.bank_size} patches.`)}catch(e){setError(e.message)}}
+  async function askQuestion(event){event?.preventDefault();if(!question.trim())return;const asked=question.trim();setQuestion('');const idx=chatItems.length;setChatItems(items=>[...items,{question:asked,answer:'Thinking...'}]);try{const v=await api('/chat',json('POST',{question:asked}));setChatItems(items=>items.map((it,i)=>i===idx?{...it,answer:v.answer}:it))}catch(e){setError(e.message);setChatItems(items=>items.map((it,i)=>i===idx?{...it,answer:'Unable to retrieve an answer right now.'}:it))}}
+  const logout=()=>{localStorage.removeItem('visionqc_token');localStorage.removeItem('visionqc_user');navigate('/login')};
+  const title=titleMap[location.pathname]||'Inspect';const fitted=!!health?.fitted;const chartData=(stats?.score_trend||[]).map(point=>({...point,shortTime:new Date(point.ts).toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'})}));
+  const pageProps={health,stats,history,alerts,heatGrid,threshold,setThreshold,bounds,result,setResult,rawFrame,fitResult,busy,fitDataset,fitUploads,source,chooseSource,running,toggleInspecting,videoRef,canvasRef,videoUrl,setVideoUrl,setError,saveThreshold,confirmFalseAlarm,question,setQuestion,chatItems,askQuestion,chartData,setSelected,selected,filter,setFilter};
+  return <div className="app-shell"><aside className="sidebar"><div className="sidebar-brand"><Brand small/></div><div className="workspace-label">WORKSPACE</div><nav className="side-nav">{NAV.map(([label,path,Icon])=><NavLink key={path} to={path} className={({isActive})=>`side-link ${isActive?'active':''}`}><Icon size={16}/><span>{label}</span>{label==='Alerts'&&alerts.length>0&&<b className="alert-count">{alerts.length}</b>}</NavLink>)}</nav><div className="sidebar-bottom"><div className="support-card"><CircleHelp size={18}/><b>Need a hand?</b><span>Visit the Help Center</span></div><div className="sidebar-user"><div className="avatar">{(localStorage.getItem('visionqc_user')||'D').slice(0,1).toUpperCase()}</div><div><b>{localStorage.getItem('visionqc_user')||'Demo user'}</b><span>Factory A</span></div><button aria-label="Log out" onClick={logout}><LogOut size={16}/></button></div></div></aside><main className="main-area"><header className="topbar"><div className="breadcrumb">Workspace <span>/</span> <b>{title}</b></div><div className="topbar-right"><button className="factory-select">Factory A <ChevronDown size={14}/></button><span className="topbar-sep"/><div className="top-avatar">{(localStorage.getItem('visionqc_user')||'D').slice(0,1).toUpperCase()}</div><button className="top-user" onClick={logout}>Log out</button></div></header><div className="status-strip"><span className={`status-item ${fitted?'good':'warn'}`}><i/>{fitted?'Model ready':'Model not fitted'}</span><span className="status-divider"/><span className="status-item"><Database size={14}/>{fitted?'Memory bank active':'Memory bank empty'}</span><span className="status-divider"/><span className="status-item"><SlidersHorizontal size={14}/>Threshold {fmt(threshold,3)}</span><span className="status-divider"/><span className="status-item"><span className="drift-dot"/>{stats?.drift?.warn?'DRIFT DETECTED':'DRIFTGUARD STABLE'}</span></div><div className="page-content"><Routes>
+    <Route path="home" element={<Home {...pageProps}/>}/><Route path="teach" element={<Teach {...pageProps}/>}/><Route path="inspect" element={<Inspect {...pageProps}/>}/><Route path="threshold" element={<Threshold {...pageProps}/>}/><Route path="capture-checks" element={<CaptureChecks {...pageProps}/>}/><Route path="false-alarm" element={<FalseAlarm {...pageProps}/>}/><Route path="repeat-defect" element={<RepeatDefect {...pageProps}/>}/><Route path="driftguard" element={<DriftGuard {...pageProps}/>}/><Route path="dashboard" element={<Dashboard {...pageProps}/>}/><Route path="ask-the-log" element={<AskLog {...pageProps}/>}/><Route path="history" element={<History {...pageProps}/>}/><Route path="alerts" element={<AlertsPage {...pageProps}/>}/><Route path="settings" element={<SettingsPage {...pageProps}/>}/><Route index element={<Navigate to="inspect" replace/>}/><Route path="*" element={<Navigate to="inspect" replace/>}/>
+    </Routes></div></main><Toast message={error} onClose={closeToast}/></div>;
+}
+
+function PageHeader({ num, title, description, action }) { return <SectionTitle eyebrow={num} title={title} description={description} action={action}/>; }
+function Home(p){const latest=p.history[0];return <><PageHeader title="Good morning" description="Here’s what’s happening on your production line today." action={<Button onClick={()=>location.assign('/app/inspect')}><ScanLine size={16}/> Start inspection</Button>}/><div className="stat-grid four"><StatCard label="Inspected" value={p.stats?.total??'—'} note="All time" icon={ScanLine}/><StatCard label="Rejected" value={p.stats?.fail??'—'} note="Failed units" icon={X}/><StatCard label="Rejection rate" value={p.stats?pct(p.stats.rejection_rate_today):'—'} note="Today" icon={Gauge}/><StatCard label="Recaptures" value={p.stats?.recapture??'—'} note="Needs another look" icon={AlertTriangle}/></div><div className="home-grid"><Card><div className="card-heading"><div><span className="eyebrow">LATEST INSPECTION</span><h3>Most recent verdict</h3></div><Link to="/app/history">View history <ArrowRight size={14}/></Link></div>{latest?<div className="latest-row"><VerdictBadge verdict={latest.verdict} reason={latest.reason}/><div className="latest-meta"><span>Score <b>{fmt(latest.score,3)}</b></span><span>{new Date(latest.ts).toLocaleString()}</span></div></div>:<EmptyState title="No inspections yet" detail="Start an inspection to see the latest result here." action={<Link to="/app/inspect" className="text-link">Open Inspect <ArrowRight size={14}/></Link>}/>}</Card><Card><div className="card-heading"><div><span className="eyebrow">NEEDS ATTENTION</span><h3>Active alerts</h3></div><Link to="/app/alerts">All alerts <ArrowRight size={14}/></Link></div>{p.alerts.length?p.alerts.slice(0,4).map(a=><div className="alert-row" key={a.id}><span className="alert-icon"><AlertTriangle size={15}/></span><span>{a.message}</span><small>{a.ts?new Date(a.ts).toLocaleTimeString():''}</small></div>):<div className="inline-empty"><CheckCircle2 size={17}/> No active alerts. Your line looks stable.</div>}</Card></div><div className="quick-actions"><Link to="/app/teach"><Database size={18}/><span><b>Teach the model</b><small>Add good units to the memory bank</small></span><ArrowRight size={17}/></Link><Link to="/app/inspect"><ScanLine size={18}/><span><b>Inspect a product</b><small>Start a live or video inspection</small></span><ArrowRight size={17}/></Link></div></>}
+function Teach(p){const count=p.fitResult?.fit?.images||0;return <><PageHeader num="01 / LEARN" title="Teach VisionQC" description="Show the model what a good unit looks like. Upload at least two clear photos." action={<span className={`ready-chip ${p.health?.fitted?'ready':'pending'}`}><span/> {p.health?.fitted?'Memory bank ready':'Model needs training'}</span>}/><div className="teach-layout"><Card className="teach-main"><div className="card-heading"><div><span className="eyebrow">GOOD UNITS</span><h3>Training images <small>{count||'0'} / 30</small></h3></div><button className="text-button" onClick={p.fitDataset} disabled={p.busy}><Database size={15}/> Use dataset</button></div><label className="upload-drop"><input type="file" accept="image/*" multiple onChange={p.fitUploads}/><span className="upload-icon"><CloudUpload size={23}/></span><b>Drop good product photos here</b><small>or browse files · PNG, JPG · minimum 2 images</small><span className="button outline"><Upload size={15}/> Choose photos</span></label><div className="sample-grid">{Array.from({length:12},(_,i)=><div key={i} className="sample-thumb"><Bottle className="thumb-bottle"/><span>{String(i+1).padStart(2,'0')}</span></div>)}</div><div className="teach-actions"><p><Info size={15}/> Only add products you know are defect-free.</p><Button onClick={p.fitDataset} disabled={p.busy}>{p.busy?<Spinner/>:<Sparkles size={16}/>} Learn from dataset</Button></div></Card><div className="teach-side"><Card><span className="eyebrow">HOW IT WORKS</span><h3>Build a good baseline</h3><p className="muted">VisionQC compares each new product against the visual patterns it learns from your good units.</p><div className="learn-points"><span><CheckCircle2/> Consistent framing</span><span><CheckCircle2/> Even lighting</span><span><CheckCircle2/> Multiple angles</span></div></Card><Card className="calibration-card"><span className="eyebrow">LAST CALIBRATION</span>{p.fitResult?<><h3>Model learned</h3><p>{p.fitResult.fit.images} images · {p.fitResult.fit.patches} visual patches</p><div className="calib-stat"><span>Recommended threshold</span><b>{fmt(p.fitResult.suggested_threshold,4)}</b></div><div className="calib-stat"><span>Calibration range</span><b>{fmt(p.fitResult.calibration.min,3)} – {fmt(p.fitResult.calibration.max,3)}</b></div></>:<EmptyState title="Not calibrated" detail="Learn from good units to set a reliable baseline."/>}</Card></div></div></>}
+function Inspect(p){const isReady=p.health?.fitted;const frame=p.rawFrame;const heat=p.result?.heatmap_png_base64?`data:image/png;base64,${p.result.heatmap_png_base64}`:null;return <><PageHeader num="02 / QUALITY CHECK" title="Inspect" description="Inspect a live camera feed or replay a recorded video." action={<div className="source-toggle"><button className={p.source==='webcam'?'selected':''} onClick={()=>p.chooseSource('webcam')}><Video size={15}/> Camera</button><button className={p.source==='video'?'selected':''} onClick={()=>p.chooseSource('video')}><Upload size={15}/> Video file</button></div>}/>{!isReady?<EmptyState action={<Link to="/app/teach" className="button primary">Teach the model <ArrowRight size={15}/></Link>}/>:<><div className="inspect-grid"><Card className="feed-card"><div className="feed-top"><div><span className="eyebrow">LIVE INSPECTION</span><h3>Camera feed</h3></div><span className={`live-chip ${p.running?'on':''}`}><i/>{p.running?'LIVE':'READY'}</span></div>{p.source==='video'&&<label className="file-picker"><input type="file" accept="video/*" onChange={e=>{const f=e.target.files[0];if(f){if(p.videoUrl)URL.revokeObjectURL(p.videoUrl);p.setVideoUrl(URL.createObjectURL(f))}}}/><Upload size={14}/> Select a video</label>}<div className="video-stage"><video ref={p.videoRef} src={p.source==='video'?p.videoUrl:undefined} muted playsInline controls={p.source==='video'} autoPlay={p.source==='webcam'}/>{frame&&<img className="frame-overlay" src={frame} alt="Latest inspected frame"/>}{!frame&&<div className="video-placeholder"><ScanLine size={32}/><span>{p.source==='video'?'Choose a video file to begin':'Camera preview will appear here'}</span></div>}<div className="scan-corners"/></div><div className="feed-controls"><Button onClick={p.toggleInspecting} variant={p.running?'danger':'primary'}>{p.running?<><StopCircle size={16}/> Stop inspection</>:<><Play size={16}/> Start inspection</>}</Button><span>One frame is analyzed at a time</span></div><canvas ref={p.canvasRef} hidden/></Card><div className="heat-card-wrap"><Card className="heat-card"><div className="card-heading"><div><span className="eyebrow">MODEL OUTPUT</span><h3>Anomaly heatmap</h3></div><span className="heat-legend"><i/> attention</span></div><div className="heat-preview">{heat?<img src={heat} alt="JET anomaly heatmap overlay"/>:frame?<img src={frame} alt="Captured product frame"/>:<div className="heat-empty"><Image size={25}/><span>Heatmap appears after inspection</span></div>}</div><div className="heat-caption"><span>LOW</span><div/><span>HIGH ANOMALY</span></div></Card><Card className="result-card"><span className="eyebrow">INSPECTION RESULT</span>{p.result?<><div className="result-stats"><div><small>Anomaly score</small><b>{fmt(p.result.score,3)}</b></div><div><small>Confidence</small><b>{fmt(p.result.confidence_pct)}%</b></div></div><VerdictBadge verdict={p.result.verdict} reason={p.result.reason}/>{p.result.verdict==='FAIL'&&<button className="text-link" onClick={()=>p.confirmFalseAlarm()}>False alarm? Teach this as good</button>}</>:<EmptyState title="Ready to inspect" detail="Start the camera to analyze your first product."/>}<div className="result-details"><span>Product<b>Stainless steel bottle</b></span><span>ID<b>{p.result?.id||'—'}</b></span><span>Time<b>{p.result?.ts?new Date(p.result.ts).toLocaleTimeString():'—'}</b></span></div></Card></div></div></>}</>}
+function Threshold(p){return <><PageHeader num="03 / DECISION RULES" title="Threshold" description="Control how sensitive VisionQC is to surface anomalies." action={<Button variant="outline" onClick={()=>p.fitDataset()}><Sparkles size={15}/> Suggest threshold</Button>}/><div className="threshold-layout"><Card className="threshold-main"><div className="threshold-head"><div><span className="eyebrow">ANOMALY CUTOFF</span><h3>Inspection threshold</h3></div><output>{fmt(p.threshold*100,1)}<small>%</small></output></div><p className="muted">Products with anomaly scores above this value will be marked for review.</p><input className="threshold-range" type="range" min={p.bounds.min||0} max={p.bounds.max||1} step={Math.max((p.bounds.max-p.bounds.min)/500,.0001)} value={Math.min(p.threshold,p.bounds.max)} onChange={e=>p.setThreshold(Number(e.target.value))} onPointerUp={p.saveThreshold} onKeyUp={p.saveThreshold} aria-label="Inspection threshold"/><div className="range-labels"><span>{fmt(p.bounds.min,3)} · More sensitive</span><span>Less sensitive · {fmt(p.bounds.max,3)}</span></div><div className="calibration-range"><div className="card-heading"><div><span className="eyebrow">CALIBRATION RANGE</span><h3>Recommended operating window</h3></div><span className="range-pill">{p.fitResult?`${fmt(p.fitResult.calibration.min,3)} – ${fmt(p.fitResult.calibration.max,3)}`:'Fit model to calibrate'}</span></div><div className="range-track"><div style={{left:'10%',width:'55%'}}/><i style={{left:`${Math.max(0,Math.min(96,(p.threshold/(p.bounds.max||1))*100))}%`}}/></div><div className="range-labels"><span>Lower false rejects</span><span>Higher defect sensitivity</span></div></div></Card><Card className="false-rejection"><span className="eyebrow">ESTIMATED FALSE REJECTION</span><div className="fr-value">—</div><p>A false-rejection estimate needs known-good validation results. The current API does not return this metric.</p><div className="fr-foot"><Info size={14}/> Not available from the backend</div></Card></div><div className="inline-hint"><Info size={16}/> Changes save to the backend as you adjust the slider.</div></>}
+function CaptureChecks(p){const d=p.result?.debug||{};const reason=String(p.result?.reason||'').toLowerCase();const dark=reason.includes('dark')||(d.brightness!=null&&d.brightness_min!=null&&d.brightness<d.brightness_min);const blurry=reason.includes('blurry')||(d.sharpness!=null&&d.sharpness_min!=null&&d.sharpness<d.sharpness_min);const shifted=reason.includes('position')||reason.includes('shift');const checks=[['Too Dark','Increase station lighting or exposure.',dark?'issue':p.result?'ok':'idle',d.brightness!=null?`Brightness ${fmt(d.brightness,0)} · minimum ${fmt(d.brightness_min,0)}`:null],['Blurry','Hold the product steady and refocus.',blurry?'issue':p.result?'ok':'idle',d.sharpness!=null?`Sharpness ${fmt(d.sharpness,0)} · minimum ${fmt(d.sharpness_min,0)}`:null],['Product Shifted','Center the product inside the guide.',shifted?'issue':p.result?'ok':'idle',p.result?(shifted?'Review framing':'Frame accepted'):null],['Auto-align','Alignment runs automatically before scoring.',p.result&&p.result.verdict==='RECAPTURE'&&reason.includes('align')?'issue':p.result?'ok':'idle',p.result?'Alignment check completed':'Waiting for an inspection']];return <><PageHeader num="04 / IMAGE QUALITY" title="Capture checks" description="Make sure every frame is clear and consistently positioned."/><div className="capture-grid">{checks.map(([t,d,status,metric],i)=><Card className="capture-card" key={t}><div className={`capture-thumb capture-${i}`}>{i===3?<AlignCenter size={36}/>:p.rawFrame?<img src={p.rawFrame} alt="Latest captured frame"/>:<Bottle className="thumb-bottle"/>}<span className={`check-dot check-${status}`}/></div><div><div className="capture-title"><h3>{t}</h3><span className={`mini-status ${status}`}>{status==='issue'?'Needs attention':status==='ok'?'Ready':'Waiting'}</span></div><p>{metric||d}</p></div></Card>)}</div><div className="inline-hint"><Info size={16}/> Brightness and sharpness use live diagnostics from the latest inspection. Product-position details are inferred from the recapture reason.</div></>}
+function FalseAlarm(p){const fails=p.history.filter(row=>row.verdict==='FAIL');return <><PageHeader num="05 / MODEL FEEDBACK" title="False alarm learning" description="Confirm good products that were incorrectly rejected to improve future inspections."/><div className="falsealarm-layout"><Card className="falsealarm-card"><div className="shield-large"><ShieldCheck size={36}/></div><span className="eyebrow">SUPERVISOR REVIEW</span><h2>Was this a false alarm?</h2><p>This unit looks good. Add it to the memory bank to help avoid future false rejects.</p>{p.result?.verdict==='FAIL'?<><VerdictBadge verdict="FAIL" reason={p.result.reason}/><Button onClick={()=>p.confirmFalseAlarm()}><Plus size={16}/> Add unit to memory bank</Button></>:<div className="no-fail-note">Choose a recent failed unit below, or return to Inspect to capture one.</div>}<button className="button outline" onClick={()=>p.setResult(null)}>Undo / clear selection</button></Card><Card className="recent-fails"><div className="card-heading"><div><span className="eyebrow">REVIEW QUEUE</span><h3>Recent failed units</h3></div><span className="count-pill">{fails.length}</span></div>{fails.length?fails.slice(0,8).map(item=><button className="fail-row" key={item.id} onClick={()=>p.setResult(item)}><span className="fail-thumb"><Bottle className="thumb-bottle"/></span><span><b>Unit #{item.id}</b><small>{item.reason||'Anomaly detected'} · {new Date(item.ts).toLocaleString()}</small></span><span className="fail-score">{fmt(item.score,3)}</span><ArrowRight size={15}/></button>):<EmptyState title="No failed units yet" detail="Failed inspection results will appear here for review."/>}</Card></div></>}
+function RepeatDefect(p){const grid=p.heatGrid;const max=Math.max(1,...grid.flat().map(Number));const alert=p.alerts[0];const x=alert?.location?.x??alert?.hotspot?.x??'—',y=alert?.location?.y??alert?.hotspot?.y??'—';return <><PageHeader num="06 / PATTERN DETECTION" title="Repeat defect" description="Spot recurring defects at the same location across recent units."/><div className="repeat-layout"><Card className="repeat-main"><div className="card-heading"><div><span className="eyebrow">CUMULATIVE ANOMALIES</span><h3>Defect location map</h3></div><span className="range-pill">Last 25 units</span></div>{grid.length?<div className="heat-grid">{grid.map((row,ri)=><div className="heat-row" key={ri}>{row.map((n,ci)=><span key={ci} title={`${n} detections`} style={{background:n?`rgba(229,72,77,${Math.min(.18+Number(n)/max*.78,.96)})`:'#f0f3f7'}}/>)}</div>)}</div>:<EmptyState title="No defect map yet" detail="Inspect units to build a repeat-defect map."/>}<div className="heat-legend-list"><span><i className="normal"/> Normal</span><span><i className="minor"/> Minor</span><span><i className="major"/> Major</span><span><i className="critical"/> Critical</span></div></Card><Card className="repeat-side">{alert?<div className="repeat-alert"><AlertTriangle size={18}/><b>{alert.message}</b></div>:<div className="stable-banner"><CheckCircle2 size={18}/> No active repeat-defect alert</div>}<div className="repeat-stats"><span>Location<b>{x} <i>/</i> {y}</b></span><span>Fail count<b>{alert?.count??'—'} <small>/ 25 units</small></b></span><span>Last seen<b>{alert?.ts?new Date(alert.ts).toLocaleString():'—'}</b></span></div><div className="inline-hint"><Info size={15}/> Alert detail fields depend on the data returned by the repeat-defect API.</div></Card></div></>}
+function DriftGuard(p){const drift=p.stats?.drift||{};return <><PageHeader title="DriftGuard" description="Monitor score drift and keep your inspection baseline trustworthy."/><div className="drift-status"><span className={`drift-emblem ${drift.warn?'warning':''}`}><Activity size={23}/></span><div><span className="eyebrow">CURRENT STATUS</span><h2>{drift.warn?'Drift detected':'Stable'}</h2><p>{drift.warn?'Recent anomaly scores differ from the calibration baseline. Review camera and product conditions.':'Inspection scores are within the expected calibration baseline.'}</p></div><span className={`status-pill ${drift.warn?'warning':'good'}`}><i/>{drift.warn?'REVIEW':'STABLE'}</span></div><div className="drift-grid"><Card><div className="card-heading"><div><span className="eyebrow">SCORE MONITOR</span><h3>Inspection score trend</h3></div></div><Chart data={p.chartData} threshold={p.threshold}/></Card><Card><span className="eyebrow">CAPTURE HEALTH</span><h3>Brightness & sharpness</h3><EmptyState title="No capture metrics available" detail="Brightness and sharpness signals are not included in the current stats response."/></Card><Card><span className="eyebrow">BASELINE MANAGEMENT</span><h3>Normal samples</h3><p className="muted">New normal approval and memory bank version rollback require backend support that is not currently available.</p><Button disabled title="Not supported by the current API"><Check size={15}/> Approve as new normal</Button></Card><Card><span className="eyebrow">MODEL VERSIONS</span><h3>Bank history</h3><div className="inline-empty"><Database size={16}/> Version history is not exposed by the current API.</div></Card></div></>}
+function Chart({data,threshold}){return <div className="chart"><ResponsiveContainer width="100%" height="100%"><LineChart data={data} margin={{left:0,right:12,top:8,bottom:0}}><CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e9edf3"/><XAxis dataKey="shortTime" tick={{fontSize:10,fill:'#8794a5'}} axisLine={false} tickLine={false}/><YAxis domain={[0,'auto']} tick={{fontSize:10,fill:'#8794a5'}} axisLine={false} tickLine={false}/><Tooltip/><ReferenceLine y={threshold} stroke="#e5484d" strokeDasharray="5 4" label="Threshold"/><Line type="monotone" dataKey="score" stroke="#377fb4" strokeWidth={2.5} dot={false}/></LineChart></ResponsiveContainer></div>}
+function Dashboard(p){const stats=p.stats;const data=[{name:'Pass',value:stats?.pass||0,color:'#22a06b'},{name:'Fail',value:stats?.fail||0,color:'#e5484d'},{name:'Recapture',value:stats?.recapture||0,color:'#f5a524'}];return <><PageHeader num="07 / PERFORMANCE" title="Production dashboard" description="A live view of inspection volume and quality outcomes."/><div className="stat-grid three"><StatCard label="Inspected" value={stats?.total??'—'} note="Tracked inspections" trend="+12%" icon={ScanLine}/><StatCard label="Rejected" value={stats?.fail??'—'} note="Failed units" trend="+3%" icon={X}/><StatCard label="Rejection rate" value={stats?pct(stats.rejection_rate_today):'—'} note="Today" trend="−0.6%" icon={Gauge}/></div><div className="dashboard-grid"><Card><div className="card-heading"><div><span className="eyebrow">QUALITY TREND</span><h3>Score trend</h3></div><span className="chart-legend"><i/> Anomaly score <i className="legend-threshold"/> Threshold</span></div><Chart data={p.chartData} threshold={p.threshold}/></Card><Card><div className="card-heading"><div><span className="eyebrow">OUTCOME MIX</span><h3>Inspection results</h3></div></div><div className="donut-wrap"><ResponsiveContainer width="100%" height={210}><PieChart><Pie data={data} dataKey="value" nameKey="name" innerRadius={62} outerRadius={88} paddingAngle={3}>{data.map(d=><Cell key={d.name} fill={d.color}/>)}</Pie><Tooltip/></PieChart></ResponsiveContainer><div className="donut-center"><strong>{stats?.total??0}</strong><small>units</small></div></div><div className="donut-legend">{data.map(d=><span key={d.name}><i style={{background:d.color}}/>{d.name}<b>{stats?pct(d.value/Math.max(stats.total,1)):'—'}</b></span>)}</div></Card></div></>}
+function AskLog(p){const suggestions=['Show me all units with defects in the last 2 hours','Why are rejections up today?','Which spot fails most?'];return <><PageHeader num="08 / PRODUCTION ASSISTANT" title="Ask the Log" description="Ask a question about inspection results in plain language."/><Card className="chat-card"><div className="chat-top"><span className="assistant-avatar"><Sparkles size={17}/></span><div><b>VisionQC assistant</b><small>Answers from your inspection history</small></div><span className="online-dot">Online</span></div><div className="chat-messages">{p.chatItems.length===0&&<div className="chat-welcome"><span className="welcome-icon"><MessageSquareText size={23}/></span><h3>What would you like to know?</h3><p>Ask about your recent quality trends, defects, or individual units.</p><div className="prompt-chips">{suggestions.map(s=><button key={s} onClick={()=>{p.setQuestion(s);setTimeout(()=>document.querySelector('.chat-input')?.focus(),0)}}>{s}<ArrowRight size={13}/></button>)}</div></div>}{p.chatItems.map((it,i)=><div className="chat-pair" key={i}><div className="user-bubble">{it.question}</div><div className="assistant-bubble"><span className="assistant-avatar small"><Sparkles size={14}/></span><div><p>{it.answer}</p>{it.answer!=='Thinking...'&&<Link to="/app/history" className="text-link">View in History <ArrowRight size={13}/></Link>}</div></div></div>)}</div><form className="chat-form" onSubmit={p.askQuestion}><input className="chat-input" value={p.question} onChange={e=>p.setQuestion(e.target.value)} placeholder="Ask a question about your production data…"/><Button aria-label="Send question"><Send size={16}/></Button></form></Card></>}
+function History(p){const rows=p.history.filter(row=>p.filter==='All'||row.verdict===p.filter);return <><PageHeader num="09 / INSPECTION RECORDS" title="History" description="Review past inspections and their model results." action={<div className="filter-controls"><select value={p.filter} onChange={e=>p.setFilter(e.target.value)} aria-label="Filter by verdict"><option>All</option><option>PASS</option><option>FAIL</option><option>RECAPTURE</option></select><button className="button outline" onClick={()=>p.setFilter('All')}><Clock3 size={15}/> All time</button></div>}/><Card className="table-card"><div className="table-overflow"><table className="data-table"><thead><tr><th>Time</th><th>Verdict</th><th>Score</th><th>Confidence</th><th>Reason</th><th/></tr></thead><tbody>{rows.map(row=><tr key={row.id} onClick={()=>p.setSelected(row)}><td>{new Date(row.ts).toLocaleString()}</td><td><VerdictBadge verdict={row.verdict}/></td><td>{fmt(row.score,4)}</td><td>{fmt(row.confidence)}%</td><td>{row.reason||'—'}</td><td><ArrowRight size={15}/></td></tr>)}</tbody></table>{rows.length===0&&<EmptyState title="No inspection records" detail="Results will appear here after you run an inspection."/>}</div><div className="table-footer">Showing {rows.length} of {p.history.length} inspections</div></Card>{p.selected&&<div className="drawer-backdrop" onClick={()=>p.setSelected(null)}><aside className="detail-drawer" onClick={e=>e.stopPropagation()}><div className="drawer-head"><div><span className="eyebrow">INSPECTION #{p.selected.id}</span><h2>Inspection detail</h2></div><button onClick={()=>p.setSelected(null)} aria-label="Close"><X size={18}/></button></div><VerdictBadge verdict={p.selected.verdict} reason={p.selected.reason}/><div className="drawer-image"><Bottle className="art-bottle"/></div><div className="drawer-details"><span>Time<b>{new Date(p.selected.ts).toLocaleString()}</b></span><span>Score<b>{fmt(p.selected.score,4)}</b></span><span>Confidence<b>{fmt(p.selected.confidence)}%</b></span></div><p className="muted">Saved frame and heatmap are not included in the history API response.</p></aside></div>}</>}
+function AlertsPage(p){return <><PageHeader title="Alerts" description="Review repeat defects and model drift that need attention."/><div className="alerts-list">{p.alerts.map(a=><Card className="alert-card" key={a.id}><span className="alert-icon"><AlertTriangle size={17}/></span><div><span className="eyebrow">REPEAT DEFECT</span><h3>{a.message}</h3><p>{a.ts?new Date(a.ts).toLocaleString():'Recent alert'}</p></div><span className="status-pill warning"><i/> Active</span></Card>)}{p.stats?.drift?.warn&&<Card className="alert-card"><span className="alert-icon drift"><Activity size={17}/></span><div><span className="eyebrow">DRIFTGUARD</span><h3>Inspection score drift is above calibration baseline.</h3><p>Current status · Drift detected</p></div><span className="status-pill warning"><i/> Active</span></Card>}{!p.alerts.length&&!p.stats?.drift?.warn&&<Card><EmptyState title="You're all caught up" detail="No active repeat-defect or drift alerts." action={<CheckCircle2 size={20}/>} /></Card>}</div><div className="inline-hint"><Info size={15}/> Alert resolution controls are not available from the current backend.</div></>}
+function SettingsPage(p){const [n,setN]=useState(25),[k,setK]=useState(6);return <><PageHeader title="Settings" description="Review inspection behavior for this factory."/><div className="settings-grid"><Card><span className="eyebrow">DECISION RULES</span><h3>Inspection threshold</h3><p className="muted">Active score cutoff used to classify products.</p><div className="setting-row"><span>Threshold</span><b>{fmt(p.threshold,4)}</b></div><Link className="text-link" to="/app/threshold">Adjust threshold <ArrowRight size={14}/></Link></Card><Card><span className="eyebrow">REPEAT DEFECTS</span><h3>Cluster detection</h3><p className="muted">Display values only. The current API does not expose controls for these parameters.</p><label className="setting-row">Window size <input type="number" value={n} readOnly/></label><label className="setting-row">Cluster size <input type="number" value={k} readOnly/></label></Card><Card><span className="eyebrow">CAMERA</span><h3>Auto-align</h3><p className="muted">Alignment availability is determined by backend configuration.</p><div className="setting-row"><span>ALIGN_ENABLED</span><b className="read-only">Read-only · backend config</b></div></Card></div></>}
+
+export default function App(){return <BrowserRouter><Routes><Route path="/" element={<Landing/>}/><Route path="/login" element={localStorage.getItem('visionqc_token')?<Navigate to="/app/inspect" replace/>:<Login/>}/><Route path="/app/*" element={<Guard><Shell/></Guard>}/><Route path="*" element={<Navigate to="/" replace/>}/></Routes></BrowserRouter>}

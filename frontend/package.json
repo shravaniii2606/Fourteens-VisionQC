@@ -9,10 +9,17 @@
   },
   "dependencies": {
     "@vitejs/plugin-react": "latest",
-    "vite": "latest",
+    "framer-motion": "^13.5.0",
+    "lucide-react": "^1.49.0",
     "react": "latest",
     "react-dom": "latest",
-    "recharts": "latest"
+    "react-router-dom": "^7.18.4",
+    "recharts": "latest",
+    "vite": "latest"
   },
-  "devDependencies": {}
+  "devDependencies": {
+    "autoprefixer": "^10.6.1",
+    "postcss": "^8.5.28",
+    "tailwindcss": "^3.4.19"
+  }
 }

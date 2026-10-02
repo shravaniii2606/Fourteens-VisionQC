@@ -9,6 +9,18 @@ A local visual-defect inspection demo. It builds a PatchCore-style normal memory
 - A webcam is optional. An MVTec AD download is only needed for dataset fitting/evaluation; alternatively upload at least two good photos.
 - The first model startup downloads torchvision's pretrained weights if they are not already cached. Thereafter the memory bank and database are local. Chat calls OpenRouter and requires an API key; all other workflows run locally.
 
+## Frontend
+
+The React + Vite frontend runs at `http://localhost:5173` and expects the FastAPI backend at `http://localhost:8000` by default. Copy `frontend/.env.example` to `frontend/.env` and set `VITE_API_URL` to configure another API origin.
+
+```powershell
+cd frontend
+npm install
+npm run dev
+```
+
+Create a production bundle with `npm run build`. The UI's login is demo-only: any valid email and non-empty password opens the local demo workspace. Replace it with real authentication before production use.
+
 ## Install
 
 From the repository root, create/activate a Python 3.11 virtual environment and install the CPU PyTorch build plus backend requirements:
