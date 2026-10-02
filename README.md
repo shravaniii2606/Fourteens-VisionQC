@@ -163,6 +163,24 @@ This appends 60 synthetic inspections to the local database each time it runs. U
 ## Screenshots / Demo Information
 
 Run the frontend and backend using the instructions above to explore the landing page, inspection workspace, dashboard, history, alerts, analytics, and Ask the Log interface. The repository does not currently include a maintained screenshot gallery or hosted demo URL. Browser login is demo-only: any valid email and non-empty password opens the local demo workspace; replace it with real authentication before production use.
+<img width="1900" height="827" alt="image" src="https://github.com/user-attachments/assets/58e77846-97c1-4185-8bb7-bbcd6c810118" />
+<img width="1897" height="883" alt="image" src="https://github.com/user-attachments/assets/f06687b6-7762-4518-9bed-bcba3c666f29" />
+<img width="1901" height="720" alt="image" src="https://github.com/user-attachments/assets/f5d1f5ea-48cf-476a-b80d-4f1a833b971e" />
+<img width="1870" height="887" alt="image" src="https://github.com/user-attachments/assets/cf2b9b88-6ff9-4179-9acc-a3bed3dd6da6" />
+<img width="1877" height="876" alt="image" src="https://github.com/user-attachments/assets/99cd248f-4b83-4fb3-8ba6-3aa3a0561c6b" />
+<img width="1916" height="866" alt="image" src="https://github.com/user-attachments/assets/53ef8ee2-9915-477a-b53f-52f6de217b17" />
+
+<img width="1886" height="907" alt="image" src="https://github.com/user-attachments/assets/48aea3d0-45d8-4a16-8787-0745fcfbc5c3" />
+<img width="1897" height="910" alt="image" src="https://github.com/user-attachments/assets/fabb46b5-bda9-4ab7-a9e7-dd699e4b9a77" />
+<img width="1877" height="897" alt="image" src="https://github.com/user-attachments/assets/11d14a8c-1011-439d-a1ce-8677d53694ec" />
+<img width="1917" height="882" alt="image" src="https://github.com/user-attachments/assets/a229aaa2-443a-4fc3-b395-3f4f68344c7e" />
+<img width="1895" height="761" alt="image" src="https://github.com/user-attachments/assets/8fc0622a-6f40-423a-a2cd-546c00dd1d33" />
+<img width="1886" height="898" alt="image" src="https://github.com/user-attachments/assets/5e3e4d8d-7c2c-4136-a5da-e00c87c4e679" />
+<img width="1873" height="892" alt="image" src="https://github.com/user-attachments/assets/3f8dd0fc-9f35-404b-8920-0e8160dec97e" />
+<img width="1872" height="901" alt="image" src="https://github.com/user-attachments/assets/66eb20e6-16f8-40b4-8687-39882b314436" />
+<img width="1882" height="632" alt="image" src="https://github.com/user-attachments/assets/7e16967c-508d-4b03-84fa-080d212e9da7" />
+<img width="1870" height="882" alt="image" src="https://github.com/user-attachments/assets/bdc71974-fd28-48de-8e67-5d8d682e74be" />
+<img width="1902" height="790" alt="image" src="https://github.com/user-attachments/assets/9d623f76-9dd6-49f3-8520-6516b63538d3" />
 
 ## Limitations & Future Scope
 
